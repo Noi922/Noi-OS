@@ -1,0 +1,96 @@
+# Baut die Noi-OS-ISO auf GitHubs Servern und veröffentlicht sie als Release.
+# Starten: Repo -> "Actions" -> "Noi OS ISO bauen" -> "Run workflow".
+# Oder automatisch beim Pushen eines Tags wie v1.0
+name: Noi OS ISO bauen
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-iso
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Speicherplatz freigeben
+        run: |
+          df -h / /mnt || true
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+                      /opt/hostedtoolcache /usr/local/share/boost \
+                      /usr/local/share/powershell /usr/share/swift
+          sudo docker image prune -af >/dev/null 2>&1 || true
+          df -h / /mnt || true
+
+      - name: Build-Verzeichnis wählen
+        run: |
+          # /mnt ist auf GitHub-Runnern meist eine große Extra-Platte
+          free_mnt=$(df --output=avail -BG /mnt 2>/dev/null | tail -1 | tr -dc 0-9 || echo 0)
+          if [ "${free_mnt:-0}" -ge 30 ]; then base=/mnt/noi; else base=$PWD; fi
+          sudo mkdir -p "$base"
+          echo "NOI_WORK=$base/build" >> "$GITHUB_ENV"
+          echo "NOI_OUT=$PWD/out"     >> "$GITHUB_ENV"
+          echo "Build-Verzeichnis: $base/build"
+
+      - name: ISO bauen
+        run: sudo --preserve-env=NOI_WORK,NOI_OUT ./build.sh
+
+      - name: Für Upload vorbereiten
+        id: prep
+        run: |
+          source config.sh
+          sudo chown -R "$USER" out
+          cd out
+          iso="$ISO_NAME"
+          ls -lh
+          # GitHub-Releases erlauben max. 2 GB pro Datei -> in Teile splitten
+          split -b 1900M -d -a 2 "$iso" "$iso.part"
+          sha256sum "$iso".part* >> "$iso.sha256"
+          echo "iso=$iso" >> "$GITHUB_OUTPUT"
+          echo "version=$DISTRO_VERSION" >> "$GITHUB_OUTPUT"
+          echo "name=$DISTRO_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Release veröffentlichen
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          iso="${{ steps.prep.outputs.iso }}"
+          if [ "${GITHUB_REF_TYPE}" = tag ]; then
+            tag="${GITHUB_REF_NAME}"
+          else
+            tag="v${{ steps.prep.outputs.version }}-build${{ github.run_number }}"
+          fi
+          cat > notes.md <<EOF
+          **${{ steps.prep.outputs.name }} ${{ steps.prep.outputs.version }}** – automatisch gebaut aus \`${GITHUB_SHA::7}\`.
+
+          Die ISO ist in Teile gesplittet (GitHub erlaubt max. 2 GB pro Datei).
+          Alle \`.part\`-Dateien herunterladen und zusammenfügen:
+
+          **Linux / macOS**
+          \`\`\`
+          cat ${iso}.part* > ${iso}
+          sha256sum -c ${iso}.sha256 --ignore-missing
+          \`\`\`
+
+          **Windows (Eingabeaufforderung im Download-Ordner)**
+          \`\`\`
+          copy /b ${iso}.part00 + ${iso}.part01 ${iso}
+          \`\`\`
+          (gibt es mehr Teile, alle der Reihe nach mit \`+\` anhängen)
+
+          Danach mit [Ventoy](https://www.ventoy.net) oder balenaEtcher auf einen USB-Stick schreiben.
+          Secure Boot im BIOS für den Live-Start ausschalten.
+          EOF
+          sed -i 's/^          //' notes.md
+          gh release create "$tag" out/"$iso".part* out/"$iso".sha256 \
+            --title "${{ steps.prep.outputs.name }} ${{ steps.prep.outputs.version }} (Build ${{ github.run_number }})" \
+            --notes-file notes.md

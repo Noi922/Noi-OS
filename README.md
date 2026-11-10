@@ -40,7 +40,19 @@ noi-os/
     └── build-deb.sh
 ```
 
-## ISO bauen
+## ISO herunterladen (automatisch von GitHub gebaut)
+
+Du brauchst keinen Linux-PC: GitHub baut die ISO selbst.
+
+1. Im Repo oben auf **Actions** klicken
+2. Links **„Noi OS ISO bauen“** wählen, dann rechts **„Run workflow“** → **„Run workflow“**
+3. Ca. 1 Stunde warten
+4. Unter **Releases** (rechte Seite der Repo-Startseite) die `.part`-Dateien herunterladen
+   und wie in den Release-Notizen beschrieben zusammenfügen
+
+Alternativ startet jeder Tag-Push (z. B. `git tag v1.0 && git push --tags`) einen Build.
+
+## ISO selbst bauen
 
 Voraussetzung: ein Ubuntu- oder Debian-System (auch eine VM), etwa **25 GB freier
 Speicher**, Internet und `sudo`. Fehlende Build-Werkzeuge installiert das Skript

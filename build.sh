@@ -15,10 +15,10 @@ ROOT="$(cd "$(dirname "$0")" && pwd)"
 # shellcheck source=config.sh
 source "$ROOT/config.sh"
 
-WORK="$ROOT/build"
+WORK="${NOI_WORK:-$ROOT/build}"     # per Umgebungsvariable umlenkbar (z. B. CI)
 CHROOT="$WORK/chroot"
 IMAGE="$WORK/image"
-OUTDIR="$ROOT/out"
+OUTDIR="${NOI_OUT:-$ROOT/out}"
 STAGES=(bootstrap branding chroot squashfs iso)
 
 log()  { echo -e "\n\e[1;32m==>\e[0m \e[1m$*\e[0m"; }
