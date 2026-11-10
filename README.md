@@ -28,6 +28,7 @@ noi-os/
 ├── config.sh                 ← Name, Version, Sprache, Optionen (hier anpassen!)
 ├── config/packages.list      ← welche Programme installiert werden
 ├── build.sh                  ← baut die ISO
+├── make-vm.sh                ← baut fertige VM-Images (OVA, QCOW2, VHDX)
 ├── test-vm.sh                ← startet die ISO in QEMU
 ├── chroot/setup.sh           ← richtet das System im chroot ein
 ├── iso/grub.cfg              ← Bootmenü der Live-ISO
@@ -45,12 +46,33 @@ noi-os/
 Du brauchst keinen Linux-PC: GitHub baut die ISO selbst.
 
 1. Im Repo oben auf **Actions** klicken
-2. Links **„Noi OS ISO bauen“** wählen, dann rechts **„Run workflow“** → **„Run workflow“**
+2. Links **„Noi OS bauen“** wählen, dann rechts **„Run workflow“** → **„Run workflow“**
 3. Ca. 1 Stunde warten
 4. Unter **Releases** (rechte Seite der Repo-Startseite) die `.part`-Dateien herunterladen
    und wie in den Release-Notizen beschrieben zusammenfügen
 
 Alternativ startet jeder Tag-Push (z. B. `git tag v1.0 && git push --tags`) einen Build.
+
+## Fertige VM (VirtualBox, VMware, Proxmox, Hyper-V …)
+
+Wer Noi OS nicht erst installieren will, nimmt ein **fertiges VM-Image** aus den
+[Releases](../../releases):
+
+| Datei | VM-Software |
+|---|---|
+| `.ova` | VirtualBox, VMware Workstation/Player/Fusion/ESXi |
+| `.qcow2` | Proxmox, virt-manager/KVM, GNOME Boxes, UTM |
+| `.vhdx.zip` | Hyper-V |
+
+Beim **ersten Start** öffnet sich ein Assistent. Dort wählst du Sprache und Tastatur
+und **erstellst dein eigenes Benutzerkonto**. Danach startet Noi OS ganz normal.
+
+Selbst bauen (nach `./build.sh`):
+
+```bash
+sudo ./make-vm.sh                       # alle Formate
+sudo VM_FORMATS=qcow2 ./make-vm.sh      # nur eines
+```
 
 ## ISO selbst bauen
 

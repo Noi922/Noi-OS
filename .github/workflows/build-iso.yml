@@ -1,10 +1,18 @@
-# Baut die Noi-OS-ISO auf GitHubs Servern und veröffentlicht sie als Release.
-# Starten: Repo -> "Actions" -> "Noi OS ISO bauen" -> "Run workflow".
+# Baut Noi OS auf GitHubs Servern und veröffentlicht alles als Release:
+#   - Live-ISO (zum Installieren auf echter Hardware oder in einer VM)
+#   - fertige VM-Images: .ova (VirtualBox/VMware), .qcow2 (Proxmox/KVM/UTM),
+#     .vhdx.zip (Hyper-V) – beim ersten Start wird das eigene Konto angelegt
+# Starten: Repo -> "Actions" -> "Noi OS bauen" -> "Run workflow".
 # Oder automatisch beim Pushen eines Tags wie v1.0
-name: Noi OS ISO bauen
+name: Noi OS bauen
 
 on:
   workflow_dispatch:
+    inputs:
+      vm_images:
+        description: "Auch fertige VM-Images bauen (OVA, QCOW2, VHDX)"
+        type: boolean
+        default: true
   push:
     tags: ["v*"]
 
@@ -18,7 +26,9 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-24.04
-    timeout-minutes: 300
+    timeout-minutes: 330
+    env:
+      BUILD_VM: ${{ github.event_name != 'workflow_dispatch' || inputs.vm_images }}
     steps:
       - uses: actions/checkout@v4
 
@@ -35,27 +45,46 @@ jobs:
         run: |
           # /mnt ist auf GitHub-Runnern meist eine große Extra-Platte
           free_mnt=$(df --output=avail -BG /mnt 2>/dev/null | tail -1 | tr -dc 0-9 || echo 0)
-          if [ "${free_mnt:-0}" -ge 30 ]; then base=/mnt/noi; else base=$PWD; fi
+          if [ "${free_mnt:-0}" -ge 40 ]; then base=/mnt/noi; else base=$PWD/work; fi
           sudo mkdir -p "$base"
           echo "NOI_WORK=$base/build" >> "$GITHUB_ENV"
-          echo "NOI_OUT=$PWD/out"     >> "$GITHUB_ENV"
-          echo "Build-Verzeichnis: $base/build"
+          echo "NOI_OUT=$base/out"    >> "$GITHUB_ENV"
+          echo "Build-Verzeichnis: $base"
 
       - name: ISO bauen
         run: sudo --preserve-env=NOI_WORK,NOI_OUT ./build.sh
+
+      - name: VM-Images bauen
+        if: env.BUILD_VM == 'true'
+        run: |
+          # chroot wird nicht mehr gebraucht – Platz für die VM-Images schaffen
+          sudo rm -rf "${NOI_WORK:?}/chroot"
+          df -h "$NOI_WORK"
+          sudo --preserve-env=NOI_WORK,NOI_OUT ./make-vm.sh
 
       - name: Für Upload vorbereiten
         id: prep
         run: |
           source config.sh
-          sudo chown -R "$USER" out
-          cd out
-          iso="$ISO_NAME"
-          ls -lh
-          # GitHub-Releases erlauben max. 2 GB pro Datei -> in Teile splitten
-          split -b 1900M -d -a 2 "$iso" "$iso.part"
-          sha256sum "$iso".part* >> "$iso.sha256"
-          echo "iso=$iso" >> "$GITHUB_OUTPUT"
+          sudo chown -R "$USER" "$NOI_OUT"
+          cd "$NOI_OUT"
+          rm -f test-disk.qcow2 *.sha256
+          mkdir -p upload
+          # GitHub-Releases erlauben max. 2 GB pro Datei -> große Dateien splitten
+          for f in *.iso *.ova *.qcow2 *.vhdx.zip; do
+            [ -f "$f" ] || continue
+            sha256sum "$f" >> upload/SHA256SUMS
+            if [ "$(stat -c %s "$f")" -gt 2000000000 ]; then
+              split -b 1900M -d -a 2 "$f" "upload/$f.part"
+              rm -f "$f"
+            else
+              mv "$f" upload/
+            fi
+          done
+          (cd upload && sha256sum ./*.part* >> SHA256SUMS 2>/dev/null || true)
+          ls -lh upload
+          echo "dir=$NOI_OUT/upload" >> "$GITHUB_OUTPUT"
+          echo "base=${DISTRO_ID}-${DISTRO_VERSION}-${ARCH}" >> "$GITHUB_OUTPUT"
           echo "version=$DISTRO_VERSION" >> "$GITHUB_OUTPUT"
           echo "name=$DISTRO_NAME" >> "$GITHUB_OUTPUT"
 
@@ -63,34 +92,16 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          iso="${{ steps.prep.outputs.iso }}"
+          b="${{ steps.prep.outputs.base }}"
           if [ "${GITHUB_REF_TYPE}" = tag ]; then
             tag="${GITHUB_REF_NAME}"
           else
             tag="v${{ steps.prep.outputs.version }}-build${{ github.run_number }}"
           fi
-          cat > notes.md <<EOF
-          **${{ steps.prep.outputs.name }} ${{ steps.prep.outputs.version }}** – automatisch gebaut aus \`${GITHUB_SHA::7}\`.
-
-          Die ISO ist in Teile gesplittet (GitHub erlaubt max. 2 GB pro Datei).
-          Alle \`.part\`-Dateien herunterladen und zusammenfügen:
-
-          **Linux / macOS**
-          \`\`\`
-          cat ${iso}.part* > ${iso}
-          sha256sum -c ${iso}.sha256 --ignore-missing
-          \`\`\`
-
-          **Windows (Eingabeaufforderung im Download-Ordner)**
-          \`\`\`
-          copy /b ${iso}.part00 + ${iso}.part01 ${iso}
-          \`\`\`
-          (gibt es mehr Teile, alle der Reihe nach mit \`+\` anhängen)
-
-          Danach mit [Ventoy](https://www.ventoy.net) oder balenaEtcher auf einen USB-Stick schreiben.
-          Secure Boot im BIOS für den Live-Start ausschalten.
-          EOF
-          sed -i 's/^          //' notes.md
-          gh release create "$tag" out/"$iso".part* out/"$iso".sha256 \
+          sed -e "s/@BASE@/$b/g" -e "s/@SHA@/${GITHUB_SHA::7}/g" \
+              -e "s/@NAME@/${{ steps.prep.outputs.name }}/g" \
+              -e "s/@VERSION@/${{ steps.prep.outputs.version }}/g" \
+              .github/release-notes.md > notes.md
+          gh release create "$tag" "${{ steps.prep.outputs.dir }}"/* \
             --title "${{ steps.prep.outputs.name }} ${{ steps.prep.outputs.version }} (Build ${{ github.run_number }})" \
             --notes-file notes.md
