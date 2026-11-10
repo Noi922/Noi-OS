@@ -64,6 +64,13 @@ Package: *
 Pin: origin packages.mozilla.org
 Pin-Priority: 1000
 EOF
+    # Firefox-Sicherheitsupdates ebenfalls automatisch installieren
+    cat > /etc/apt/apt.conf.d/52noios-unattended-upgrades <<'EOF'
+// Noi OS: Firefox aus Mozillas Paketquelle automatisch aktualisieren
+Unattended-Upgrade::Origins-Pattern {
+        "site=packages.mozilla.org";
+};
+EOF
     apt-get update
 fi
 
