@@ -141,6 +141,9 @@ sed -i -e '/^  - pkgselect$/d' \
        -e '/contextualprocess@pkgselect_action/d' \
        -e '/contextualprocess@pkgselect_snap_action/d' "$CAL/settings.conf"
 sed -i "s/kubuntu_/${DISTRO_ID}_/g" "$CAL/modules/partition.conf"
+# Standard-Zeitzone (ohne Internet; online erkennt GeoIP den Standort)
+sed -i -e "s|^region:.*|region: \"${TIMEZONE%%/*}\"|" \
+       -e "s|^zone:.*|zone: \"${TIMEZONE#*/}\"|" "$CAL/modules/locale.conf"
 sed -i "s/kubuntu-2404/${DISTRO_ID}-${DISTRO_VERSION//./}/" "$CAL/modules/oemid.conf"
 # Nach der Installation: Branding behalten, Installer-Pakete entfernen
 sed -i "s/      - calamares-settings-kubuntu/      - calamares-settings-kubuntu\n      - calamares-settings-ubuntu-common\n      - casper/" \

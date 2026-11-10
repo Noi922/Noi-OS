@@ -143,6 +143,9 @@ chmod 440 /etc/sudoers
 # Assistent auf Noi OS umstellen
 rm -rf /etc/calamares/branding/kubuntu /home/oem/Desktop
 sed -i 's/^branding:.*/branding: ${DISTRO_ID}/' /etc/calamares/settings.conf
+# Standard-Zeitzone im Assistenten (ohne Internet; online erkennt GeoIP den Standort)
+sed -i -e 's|^region:.*|region: "${TIMEZONE%%/*}"|' \
+       -e 's|^zone:.*|zone: "${TIMEZONE#*/}"|' /etc/calamares/modules/locale.conf
 sed -i -e 's/Kubuntu OEM Environment/${DISTRO_NAME} Ersteinrichtung/' \
        -e 's/Starts the Kubuntu OEM Environment/Einrichtungsassistent beim ersten Start/' \
        /usr/share/xsessions/kubuntu-oem-environment.desktop
