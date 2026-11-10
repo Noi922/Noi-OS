@@ -55,9 +55,12 @@ if [[ "$FIREFOX_FROM_MOZILLA" == yes ]]; then
     # Schlüssel nur akzeptieren, wenn der Fingerabdruck dem von Mozilla
     # veröffentlichten entspricht (Schutz vor manipulierten Downloads)
     MOZ_FPR="35BAA0B33E9EB396F59CA838C0BA5CE6DC6315A3"
-    got="$(gpg -n -q --import --import-options import-show \
+    # --show-keys braucht keinen Schlüsselbund (läuft auch auf frischen Systemen)
+    gnupg_tmp="$(mktemp -d)"
+    got="$(GNUPGHOME="$gnupg_tmp" gpg --batch --with-colons --show-keys \
         /etc/apt/keyrings/packages.mozilla.org.asc 2>/dev/null \
-        | awk '/^pub/{getline; gsub(/[[:space:]]/,""); print; exit}')"
+        | awk -F: '/^fpr:/{print $10; exit}')" || true
+    rm -rf "$gnupg_tmp"
     if [[ "$got" != "$MOZ_FPR" ]]; then
         echo "FEHLER: Mozilla-Schlüssel hat unerwarteten Fingerabdruck: '$got'" >&2
         exit 1
