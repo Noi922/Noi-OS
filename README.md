@@ -14,7 +14,7 @@ Sicherheitsupdates bis 2029.
 |---|---|
 | Basis | Ubuntu 24.04 LTS, alle Ubuntu-Paketquellen |
 | Desktop | KDE Plasma 5.27 (X11 + Wayland) |
-| Design | eigenes Camo-Hintergrundbild, Farbschema „Noi Camo“, Breeze Dark, grünes Logo |
+| Design | eigenes Camo-Hintergrundbild, Farbschema „Noi Camo“, Breeze Dark, grünes Logo, eigene Boot-Animation |
 | Installer | Calamares mit eigenem Branding und eigener Diashow |
 | Pakete | **kein Snap** (gesperrt), stattdessen `.deb` + **Flatpak** in Discover |
 | Firefox | als `.deb` direkt aus Mozillas APT-Repository |
@@ -111,8 +111,6 @@ neu aufgesetzt, denn das Branding wird im chroot installiert.
 - **Secure Boot:** Die ISO wird mit `grub-mkrescue` gebaut und ist nicht signiert.
   Für den Live-Start muss Secure Boot im BIOS **aus** sein. Das installierte System
   bekommt dagegen Ubuntus signiertes shim/GRUB.
-- **Boot-Splash (Plymouth)** zeigt noch das Standard-Design. Ein eigenes Noi-Theme
-  wäre der nächste Schritt.
 - **Eigenes Update-Repository:** Für Updates des Branding-Pakets lohnt sich später
   ein eigenes APT-Repo (z. B. mit `reprepro` oder `aptly`, gehostet auf GitHub Pages).
 - `HOME_URL` & Co. in `config.sh` zeigen noch auf `example.org`.
