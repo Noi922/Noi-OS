@@ -19,7 +19,7 @@ if [ "$1" = configure ]; then
     update-alternatives --install "$T/default.plymouth" default.plymouth \
         "$T/noios/noios.plymouth" 150
     update-alternatives --install "$T/text.plymouth" text.plymouth \
-        "$T/noios/noios-text.plymouth" 150
+        "$T/noios-text/noios-text.plymouth" 150
     if command -v update-initramfs >/dev/null 2>&1; then
         update-initramfs -u || true
     fi

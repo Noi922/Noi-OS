@@ -111,6 +111,27 @@ export FLAVOUR="${DISTRO_NAME}"
 EOF
 echo "${LIVE_HOSTNAME}" > /etc/hostname
 
+# Live-Sitzung: Bildschirmsperre, Dateiindizierung und KWallet abschalten.
+# (casper macht das nur für Kubuntu-Pfade.) Läuft nur beim Live-Start im
+# initramfs – das installierte System wird aus dem unveränderten squashfs
+# entpackt und ist nicht betroffen.
+cat > /usr/share/initramfs-tools/scripts/casper-bottom/34noios_live_settings <<'EOF'
+#!/bin/sh
+PREREQ=""
+DESCRIPTION="Noi OS: Live-Sitzung einrichten..."
+prereqs() { echo "$PREREQ"; }
+case $1 in prereqs) prereqs; exit 0 ;; esac
+. /scripts/casper-functions
+log_begin_msg "$DESCRIPTION"
+xdg=/root/etc/xdg
+mkdir -p "$xdg"
+printf "\n[Daemon]\nAutolock=false\nLockOnResume=false\nTimeout=0\n" >> "$xdg/kscreenlockerrc"
+printf "[Basic Settings]\nIndexing-Enabled=false\n" >> "$xdg/baloofilerc"
+printf "[Wallet]\nEnabled=false\n" >> "$xdg/kwalletrc"
+log_end_msg
+EOF
+chmod 755 /usr/share/initramfs-tools/scripts/casper-bottom/34noios_live_settings
+
 # --- Installer (Calamares) an Noi OS anpassen --------------------------------
 log "Calamares-Installer anpassen"
 CAL=/etc/calamares
