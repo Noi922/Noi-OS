@@ -53,6 +53,14 @@ Du brauchst keinen Linux-PC: GitHub baut die ISO selbst.
 
 Alternativ startet jeder Tag-Push (z. B. `git tag v1.0 && git push --tags`) einen Build.
 
+**Automatische Updates:** Am **1. jedes Monats** baut GitHub Noi OS von selbst neu,
+mit allen aktuellen Ubuntu-Sicherheitsupdates. Es bleiben immer die **3 neuesten**
+automatischen Builds erhalten. Von Hand getaggte Versionen wie `v1.0` werden nie
+gelöscht. Den Zeitpunkt änderst du in `.github/workflows/build-iso.yml` unter `cron`.
+
+> Bereits installierte Systeme brauchen keine neue ISO: Sie bekommen Ubuntus
+> Updates ganz normal über die Aktualisierungsverwaltung bzw. Discover.
+
 ## Fertige VM (VirtualBox, VMware, Proxmox, Hyper-V …)
 
 Wer Noi OS nicht erst installieren will, nimmt ein **fertiges VM-Image** aus den

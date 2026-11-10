@@ -4,9 +4,13 @@
 #     .vhdx.zip (Hyper-V) – beim ersten Start wird das eigene Konto angelegt
 # Starten: Repo -> "Actions" -> "Noi OS bauen" -> "Run workflow".
 # Oder automatisch beim Pushen eines Tags wie v1.0
+# Außerdem automatisch am 1. jedes Monats (mit allen aktuellen Ubuntu-Updates).
 name: Noi OS bauen
 
 on:
+  schedule:
+    # Minute Stunde Tag Monat Wochentag (UTC) – hier: am 1. um 03:23 UTC
+    - cron: "23 3 1 * *"
   workflow_dispatch:
     inputs:
       vm_images:
@@ -103,5 +107,20 @@ jobs:
               -e "s/@VERSION@/${{ steps.prep.outputs.version }}/g" \
               .github/release-notes.md > notes.md
           gh release create "$tag" "${{ steps.prep.outputs.dir }}"/* \
-            --title "${{ steps.prep.outputs.name }} ${{ steps.prep.outputs.version }} (Build ${{ github.run_number }})" \
+            --title "${{ steps.prep.outputs.name }} ${{ steps.prep.outputs.version }} (Build ${{ github.run_number }}, $(date +%d.%m.%Y))" \
             --notes-file notes.md
+
+      - name: Alte automatische Builds aufräumen
+        env:
+          GH_TOKEN: ${{ github.token }}
+          KEEP: 3
+        run: |
+          # Nur automatisch erzeugte Releases (Tag vX.Y-buildN) – von Hand
+          # getaggte Versionen wie v1.0 bleiben immer erhalten.
+          gh release list --limit 100 --json tagName,createdAt \
+            --jq '[.[] | select(.tagName | test("^v.*-build[0-9]+$"))]
+                  | sort_by(.createdAt) | reverse | .['"$KEEP"':] | .[].tagName' |
+          while read -r tag; do
+            echo "Lösche altes Release $tag"
+            gh release delete "$tag" --yes --cleanup-tag
+          done
