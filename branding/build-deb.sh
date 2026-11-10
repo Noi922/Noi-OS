@@ -26,13 +26,16 @@ render() { rsvg-convert -w "$2" -h "$3" -o "$4" "$1"; }
 python3 "$ROOT/tools/make-camo-wallpaper.py" "$svg"
 python3 "$ROOT/tools/make-camo-wallpaper.py" "$STAGE/plain.svg" --no-text
 
+# (Ordner explizit anlegen – Git speichert keine leeren Verzeichnisse)
 WP="$PKG/usr/share/wallpapers/NoiCamo/contents"
+mkdir -p "$WP/images"
 for res in 3840x2160 2560x1440 1920x1080; do
     render "$svg" "${res%x*}" "${res#*x}" "$WP/images/$res.png"
 done
 render "$svg" 400 225 "$WP/screenshot.png"
 
 LNF="$PKG/usr/share/plasma/look-and-feel/org.noios.desktop/contents/previews"
+mkdir -p "$LNF"
 render "$svg" 1920 1080 "$LNF/fullscreenpreview.png"
 render "$svg" 480 270 "$LNF/preview.png"
 
