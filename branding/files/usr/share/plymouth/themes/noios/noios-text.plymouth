@@ -1,0 +1,11 @@
+[Plymouth Theme]
+Name=@DISTRO_NAME@ Text
+Description=Text-Bootanzeige von @DISTRO_NAME@
+ModuleName=ubuntu-text
+
+[ubuntu-text]
+title=@DISTRO_NAME@ @DISTRO_VERSION@
+black=0x242a1e
+white=0xe2e6d4
+brown=0x7a9a3a
+blue=0x6b7a3f

@@ -1,0 +1,45 @@
+[Plymouth Theme]
+Name=@DISTRO_NAME@
+Description=Boot-Animation von @DISTRO_NAME@ (Camouflage-Grün)
+ModuleName=two-step
+
+[two-step]
+ImageDir=/usr/share/plymouth/themes/noios
+DialogHorizontalAlignment=.5
+DialogVerticalAlignment=.7
+TitleHorizontalAlignment=.5
+TitleVerticalAlignment=.382
+HorizontalAlignment=.5
+VerticalAlignment=.75
+WatermarkHorizontalAlignment=.5
+WatermarkVerticalAlignment=.42
+Transition=none
+TransitionDuration=0.0
+BackgroundStartColor=0x242a1e
+BackgroundEndColor=0x1c2118
+ProgressBarBackgroundColor=0x313928
+ProgressBarForegroundColor=0x7a9a3a
+MessageBelowAnimation=true
+
+[boot-up]
+UseEndAnimation=false
+
+[shutdown]
+UseEndAnimation=false
+
+[reboot]
+UseEndAnimation=false
+
+[updates]
+SuppressMessages=true
+ProgressBarShowPercentComplete=true
+UseProgressBar=true
+Title=Updates werden installiert …
+SubTitle=Bitte den Computer nicht ausschalten
+
+[system-upgrade]
+SuppressMessages=true
+ProgressBarShowPercentComplete=true
+UseProgressBar=true
+Title=System wird aktualisiert …
+SubTitle=Bitte den Computer nicht ausschalten

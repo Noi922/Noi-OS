@@ -3,3 +3,24 @@ set -e
 if command -v gtk-update-icon-cache >/dev/null 2>&1; then
     gtk-update-icon-cache -q -f /usr/share/icons/hicolor || true
 fi
+
+# Boot-Animation: Kreisel-Grafiken vom Spinner-Theme kopieren (echte Dateien,
+# da der initramfs-Hook Symlinks nicht auflöst) und
+# eigenes Theme mit höherer Priorität als Ubuntus registrieren.
+T=/usr/share/plymouth/themes
+if [ "$1" = configure ]; then
+    if [ -d "$T/spinner" ]; then
+        for f in "$T"/spinner/*.png; do
+            b="$(basename "$f")"
+            case "$b" in watermark.png|bgrt-fallback.png) continue ;; esac
+            cp --remove-destination "$f" "$T/noios/$b"
+        done
+    fi
+    update-alternatives --install "$T/default.plymouth" default.plymouth \
+        "$T/noios/noios.plymouth" 150
+    update-alternatives --install "$T/text.plymouth" text.plymouth \
+        "$T/noios/noios-text.plymouth" 150
+    if command -v update-initramfs >/dev/null 2>&1; then
+        update-initramfs -u || true
+    fi
+fi

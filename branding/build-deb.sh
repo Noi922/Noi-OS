@@ -63,6 +63,20 @@ cat > "$STAGE/welcome.svg" <<EOF
 EOF
 rsvg-convert -o "$CAL/welcome.png" "$STAGE/welcome.svg"
 
+# Boot-Animation (Plymouth): Logo + Schriftzug als "Wasserzeichen"
+PLY="$PKG/usr/share/plymouth/themes/noios"
+mkdir -p "$PLY"
+render "$HERE/artwork/logo.svg" 160 160 "$STAGE/logo160.png"
+cat > "$STAGE/plymouth.svg" <<EOF
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+     width="360" height="250" viewBox="0 0 360 250">
+  <image x="100" y="0" width="160" height="160" xlink:href="file://$STAGE/logo160.png"/>
+  <text x="180" y="228" text-anchor="middle" font-family="Noto Sans, DejaVu Sans, sans-serif"
+        font-size="44" font-weight="700" fill="#e2e6d4">${DISTRO_NAME}</text>
+</svg>
+EOF
+rsvg-convert -o "$PLY/watermark.png" "$STAGE/plymouth.svg"
+
 # --- KDE-Systemvorgaben: kdeglobals = Grundeinstellungen + Farbschema -------
 cat "$HERE/kdeglobals.head" "$HERE/NoiCamo.colors" > "$PKG/etc/xdg/kdeglobals"
 

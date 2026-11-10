@@ -21,6 +21,7 @@ grub2-common
 shim-signed
 mtools
 sudo
+plymouth-theme-spinner
 curl
 ca-certificates
 gnupg

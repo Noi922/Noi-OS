@@ -2,7 +2,7 @@ Package: @DISTRO_ID@-branding
 Version: @DISTRO_VERSION@
 Architecture: all
 Maintainer: @DISTRO_NAME@ Team <noreply@example.org>
-Depends: base-files
+Depends: base-files, plymouth-theme-spinner, plymouth-label
 Section: misc
 Priority: optional
 Description: Branding und Standard-Einstellungen für @DISTRO_NAME@
