@@ -65,6 +65,20 @@ libreoffice-l10n-de
 libreoffice-help-de
 hunspell-de-de
 
+# --- Sicherheit & System ---------------------------------------------------
+ufw
+plasma-firewall
+systemd-zram-generator
+
+# --- VM-Gastwerkzeuge (aktivieren sich nur in der jeweiligen VM-Software) ---
+# Fenstergröße anpassen, Copy & Paste mit dem Host, sauberes Herunterfahren
+spice-vdagent
+qemu-guest-agent
+open-vm-tools-desktop
+virtualbox-guest-utils
+virtualbox-guest-x11
+linux-cloud-tools-generic
+
 # --- Installer -------------------------------------------------------------
 calamares
 calamares-settings-kubuntu

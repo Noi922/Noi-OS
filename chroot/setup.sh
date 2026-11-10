@@ -52,6 +52,17 @@ if [[ "$FIREFOX_FROM_MOZILLA" == yes ]]; then
     install -d -m 0755 /etc/apt/keyrings
     curl -fsSL https://packages.mozilla.org/apt/repo-signing-key.gpg \
         -o /etc/apt/keyrings/packages.mozilla.org.asc
+    # Schlüssel nur akzeptieren, wenn der Fingerabdruck dem von Mozilla
+    # veröffentlichten entspricht (Schutz vor manipulierten Downloads)
+    MOZ_FPR="35BAA0B33E9EB396F59CA838C0BA5CE6DC6315A3"
+    got="$(gpg -n -q --import --import-options import-show \
+        /etc/apt/keyrings/packages.mozilla.org.asc 2>/dev/null \
+        | awk '/^pub/{getline; gsub(/[[:space:]]/,""); print; exit}')"
+    if [[ "$got" != "$MOZ_FPR" ]]; then
+        echo "FEHLER: Mozilla-Schlüssel hat unerwarteten Fingerabdruck: '$got'" >&2
+        exit 1
+    fi
+    log "Mozilla-Schlüssel geprüft ($MOZ_FPR)"
     cat > /etc/apt/sources.list.d/mozilla.sources <<'EOF'
 Types: deb
 URIs: https://packages.mozilla.org/apt
@@ -184,6 +195,15 @@ NoDisplay=true
 OnlyShowIn=KDE;
 EOF
 rm -rf "$CAL/branding/kubuntu"
+
+# --- Firewall: eingehende Verbindungen blockieren, ausgehende erlauben ------
+# (Netzwerk-Erkennung per mDNS/DHCP erlaubt ufw standardmäßig.)
+# Einstellbar unter Systemeinstellungen → Firewall.
+log "Firewall aktivieren"
+sed -i 's/^DEFAULT_INPUT_POLICY=.*/DEFAULT_INPUT_POLICY="DROP"/' /etc/default/ufw
+sed -i 's/^DEFAULT_OUTPUT_POLICY=.*/DEFAULT_OUTPUT_POLICY="ACCEPT"/' /etc/default/ufw
+sed -i 's/^ENABLED=.*/ENABLED=yes/' /etc/ufw/ufw.conf
+systemctl enable ufw.service >/dev/null 2>&1 || true
 
 # --- Systemtexte -------------------------------------------------------------
 printf "%s %s \\\\n \\\\l\\n" "${DISTRO_NAME}" "${DISTRO_VERSION}" > /etc/issue
