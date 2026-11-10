@@ -108,6 +108,15 @@ printf '127.0.0.1\tlocalhost\n127.0.1.1\t%s\n::1\tlocalhost ip6-localhost ip6-lo
     "${LIVE_HOSTNAME}" > "$MNT/etc/hosts"
 
 for d in dev dev/pts proc sys; do mount --bind "/$d" "$MNT/$d"; done
+# GRUB schreibt root=UUID=… nur, wenn /dev/disk/by-uuid/<UUID> existiert –
+# ohne udev (Container) fehlt der Link, dann landete root=/dev/loopXpY im
+# Bootmenü und die VM fand ihre Platte nicht.
+UUID_LINK="/dev/disk/by-uuid/${ROOT_UUID}"
+if [[ ! -e $UUID_LINK ]]; then
+    mkdir -p /dev/disk/by-uuid
+    ln -s "${LOOP}p3" "$UUID_LINK"
+    CREATED_UUID_LINK=1
+fi
 mount -t tmpfs tmpfs "$MNT/run"
 
 # --- 3. Einrichten: Ersteinrichtungs-Assistent + Bootloader -------------------
@@ -162,6 +171,12 @@ rm -f /var/lib/dbus/machine-id
 EOF
 chroot "$MNT" /bin/bash /tmp/vm-setup.sh
 rm -f "$MNT/tmp/vm-setup.sh"
+[[ ${CREATED_UUID_LINK:-0} == 1 ]] && rm -f "$UUID_LINK"
+# Sicherheitsnetz: im Bootmenü darf kein Build-Gerätename stehen
+if grep -q "root=/dev/loop" "$MNT/boot/grub/grub.cfg"; then
+    die "grub.cfg enthält root=/dev/loop… statt UUID"
+fi
+grep -m1 -o "root=UUID=[^ ]*" "$MNT/boot/grub/grub.cfg"
 
 # UEFI: signiertes shim + GRUB von Ubuntu in den Standard-Pfad EFI/BOOT legen
 # (wie "grub-install --removable"). Bootet in jeder VM-Firmware ohne
