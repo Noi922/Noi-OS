@@ -158,9 +158,14 @@ neu aufgesetzt, denn das Branding wird im chroot installiert.
 
 - **Eigenes Update-Repository:** Für Updates des Branding-Pakets lohnt sich später
   ein eigenes APT-Repo (z. B. mit `reprepro` oder `aptly`, gehostet auf GitHub Pages).
-- `HOME_URL` & Co. in `config.sh` zeigen noch auf `example.org`.
 
-## Rechtliches
+## Lizenz
+
+- **Code** (Skripte, Konfiguration, Build-System): [GNU GPL v3 oder neuer](LICENSE).
+  Du darfst Noi OS nutzen, verändern und weitergeben. Veränderte Versionen müssen
+  ebenfalls unter der GPL stehen und ihren Quellcode offenlegen.
+- **Grafiken** (Logo, Camo-Hintergrundbild): [CC BY-SA 4.0](branding/artwork/LICENSE.md)
+- Die enthaltenen Ubuntu- und KDE-Pakete behalten ihre eigenen Lizenzen.
 
 Noi OS ist ein inoffizielles Derivat und steht in keiner Verbindung zu Canonical.
 „Ubuntu“ ist eine Marke von Canonical Ltd. Das Noi-Branding ersetzt das

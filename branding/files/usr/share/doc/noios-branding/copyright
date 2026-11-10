@@ -1,0 +1,30 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: @DISTRO_NAME@
+Source: https://github.com/Noi922/Noi-OS
+
+Files: *
+Copyright: 2026 Noi922 und Mitwirkende
+License: GPL-3+
+
+Files: usr/share/wallpapers/NoiCamo/*
+       usr/share/noi-os/*
+       usr/share/icons/hicolor/scalable/apps/*
+       usr/share/pixmaps/*
+       usr/share/plymouth/themes/noios/watermark.png
+       etc/calamares/branding/noios/*.png
+       usr/share/plasma/look-and-feel/org.noios.desktop/contents/previews/*
+Copyright: 2026 Noi922 und Mitwirkende
+License: CC-BY-SA-4.0
+
+License: GPL-3+
+ This program is free software: you can redistribute it and/or modify
+ it under the terms of the GNU General Public License as published by
+ the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+ .
+ On Debian/Ubuntu systems, the complete text of the GNU General Public
+ License version 3 can be found in "/usr/share/common-licenses/GPL-3".
+
+License: CC-BY-SA-4.0
+ Creative Commons Attribution-ShareAlike 4.0 International.
+ Full text: https://creativecommons.org/licenses/by-sa/4.0/legalcode

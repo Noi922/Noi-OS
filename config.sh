@@ -9,9 +9,9 @@ DISTRO_NAME="Noi OS"            # Anzeigename
 DISTRO_ID="noios"               # technischer Name (klein, ohne Leerzeichen)
 DISTRO_VERSION="1.0"
 DISTRO_CODENAME="moos"          # eigener Codename (Moos – passt zu Camo-Grün)
-HOME_URL="https://example.org/noios"      # TODO: eigene Webseite
-SUPPORT_URL="https://example.org/noios/hilfe"
-BUG_URL="https://example.org/noios/bugs"
+HOME_URL="https://github.com/Noi922/Noi-OS"
+SUPPORT_URL="https://github.com/Noi922/Noi-OS/issues"
+BUG_URL="https://github.com/Noi922/Noi-OS/issues"
 
 # --- Ubuntu-Basis ----------------------------------------------------------
 UBUNTU_CODENAME="noble"         # 24.04 LTS
