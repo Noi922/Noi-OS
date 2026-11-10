@@ -40,6 +40,7 @@ die() { echo -e "\e[1;31mFehler:\e[0m $*" >&2; exit 1; }
 declare -A need=(
     [qemu-img]=qemu-utils [sgdisk]=gdisk [unsquashfs]=squashfs-tools
     [mkfs.ext4]=e2fsprogs [mkfs.vfat]=dosfstools [partx]=util-linux [zip]=zip
+    [mcopy]=mtools
 )
 missing=()
 for t in "${!need[@]}"; do command -v "$t" >/dev/null || missing+=("${need[$t]}"); done
@@ -92,7 +93,8 @@ log "2/4 System entpacken"
 mount "${LOOP}p3" "$MNT"
 unsquashfs -f -d "$MNT" "$SQUASH" >/dev/null
 mkdir -p "$MNT/boot/efi"
-mount "${LOOP}p2" "$MNT/boot/efi"
+# Die EFI-Partition wird später per mtools beschrieben (ohne Einhängen –
+# funktioniert so auch auf Systemen ohne vfat-Kernelmodul).
 
 ROOT_UUID="$(blkid -s UUID -o value "${LOOP}p3")"
 EFI_UUID="$(blkid -s UUID -o value "${LOOP}p2")"
@@ -143,11 +145,12 @@ Session=kubuntu-oem-environment
 User=oem
 SDDM
 
-# --- Bootloader für BIOS und UEFI (Secure Boot über Ubuntus signiertes shim)
+# --- Bootloader: BIOS hier, UEFI-Dateien danach per mtools
 sed -i 's/^GRUB_TIMEOUT=.*/GRUB_TIMEOUT=3/' /etc/default/grub
+# os-prober würde sonst beim Bauen die Platten des Build-Rechners durchsuchen
+mkdir -p /etc/default/grub.d
+echo 'GRUB_DISABLE_OS_PROBER=true' > /etc/default/grub.d/90-noios-vm.cfg
 grub-install --target=i386-pc --recheck "${LOOP}"
-grub-install --target=x86_64-efi --efi-directory=/boot/efi \
-    --bootloader-id=${DISTRO_ID} --removable --no-nvram
 update-grub
 update-initramfs -u -k all
 
@@ -159,6 +162,25 @@ rm -f /var/lib/dbus/machine-id
 EOF
 chroot "$MNT" /bin/bash /tmp/vm-setup.sh
 rm -f "$MNT/tmp/vm-setup.sh"
+
+# UEFI: signiertes shim + GRUB von Ubuntu in den Standard-Pfad EFI/BOOT legen
+# (wie "grub-install --removable"). Bootet in jeder VM-Firmware ohne
+# NVRAM-Eintrag und auch mit aktivem Secure Boot.
+ESP="${LOOP}p2"
+cat > "$VM/grub-efi.cfg" <<EOF
+search.fs_uuid ${ROOT_UUID} root
+set prefix=(\$root)'/boot/grub'
+configfile \$prefix/grub.cfg
+EOF
+export MTOOLS_SKIP_CHECK=1
+mmd -i "$ESP" ::/EFI ::/EFI/BOOT ::/EFI/ubuntu
+SHIM="$MNT$(chroot "$MNT" readlink -f /usr/lib/shim/shimx64.efi.signed)"
+mcopy -i "$ESP" "$SHIM"                                              ::/EFI/BOOT/BOOTX64.EFI
+mcopy -i "$ESP" "$MNT/usr/lib/grub/x86_64-efi-signed/grubx64.efi.signed" ::/EFI/BOOT/grubx64.efi
+mcopy -i "$ESP" "$MNT/usr/lib/shim/mmx64.efi"                         ::/EFI/BOOT/mmx64.efi
+mcopy -i "$ESP" "$VM/grub-efi.cfg" ::/EFI/BOOT/grub.cfg
+mcopy -i "$ESP" "$VM/grub-efi.cfg" ::/EFI/ubuntu/grub.cfg
+mdir -i "$ESP" -/ ::/EFI
 # Freien Platz nullen, damit die Images kleiner werden
 fstrim -v "$MNT" 2>/dev/null || true
 cleanup
