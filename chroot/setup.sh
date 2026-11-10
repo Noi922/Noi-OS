@@ -178,6 +178,10 @@ rm -rf "$CAL/branding/kubuntu"
 # --- Systemtexte -------------------------------------------------------------
 printf "%s %s \\\\n \\\\l\\n" "${DISTRO_NAME}" "${DISTRO_VERSION}" > /etc/issue
 echo "${DISTRO_NAME} ${DISTRO_VERSION}" > /etc/issue.net
+# Begrüßung in der Konsole ("Welcome to …"): nur die Beschreibung ändern.
+# DISTRIB_ID/CODENAME bleiben Ubuntu/noble, damit PPAs & Co. weiter funktionieren.
+sed -i "s/^DISTRIB_DESCRIPTION=.*/DISTRIB_DESCRIPTION=\"${DISTRO_NAME} ${DISTRO_VERSION} (basiert auf Ubuntu ${UBUNTU_VERSION} LTS)\"/" /etc/lsb-release
+chmod -x /etc/update-motd.d/10-help-text 2>/dev/null || true
 sed -i "s/^GRUB_DISTRIBUTOR=.*/GRUB_DISTRIBUTOR=\"${DISTRO_NAME}\"/" /etc/default/grub 2>/dev/null || true
 
 # --- initramfs mit casper neu bauen ----------------------------------------
