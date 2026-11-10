@@ -33,6 +33,8 @@ jobs:
     timeout-minutes: 330
     env:
       BUILD_VM: ${{ github.event_name != 'workflow_dispatch' || inputs.vm_images }}
+      # Google-Drive-Upload nur, wenn das Geheimnis RCLONE_CONFIG eingetragen ist
+      HAS_DRIVE: ${{ secrets.RCLONE_CONFIG != '' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -65,6 +67,31 @@ jobs:
           sudo rm -rf "${NOI_WORK:?}/chroot"
           df -h "$NOI_WORK"
           sudo --preserve-env=NOI_WORK,NOI_OUT ./make-vm.sh
+
+      - name: ISO nach Google Drive hochladen
+        if: env.HAS_DRIVE == 'true'
+        env:
+          RCLONE_CONFIG_CONTENT: ${{ secrets.RCLONE_CONFIG }}
+          KEEP: 3
+        run: |
+          source config.sh
+          sudo apt-get install -y -qq rclone >/dev/null
+          mkdir -p ~/.config/rclone
+          printf '%s\n' "$RCLONE_CONFIG_CONTENT" > ~/.config/rclone/rclone.conf
+          chmod 600 ~/.config/rclone/rclone.conf
+          remote="$(sed -n 's/^\[\(.*\)\]$/\1/p' ~/.config/rclone/rclone.conf | head -1)"
+          [ -n "$remote" ] || { echo "RCLONE_CONFIG enthält keinen [Namen]-Abschnitt"; exit 1; }
+          sudo chown -R "$USER" "$NOI_OUT"
+          ziel="noios-${DISTRO_VERSION}-$(date +%Y-%m-%d)-build${{ github.run_number }}.iso"
+          echo "Lade $ISO_NAME als '$ziel' nach '$remote:Noi OS' hoch …"
+          rclone copyto "$NOI_OUT/$ISO_NAME" "$remote:Noi OS/$ziel" --stats 60s --stats-one-line
+          # Nur die neuesten $KEEP ISOs im Drive-Ordner behalten (Speicherplatz)
+          rclone lsf "$remote:Noi OS" --files-only --include "noios-*.iso" | sort |
+            head -n "-$KEEP" | while read -r alt; do
+              echo "Entferne alte ISO: $alt"
+              rclone deletefile "$remote:Noi OS/$alt"
+            done
+          rm -f ~/.config/rclone/rclone.conf
 
       - name: Für Upload vorbereiten
         id: prep

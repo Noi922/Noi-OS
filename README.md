@@ -61,6 +61,23 @@ gelöscht. Den Zeitpunkt änderst du in `.github/workflows/build-iso.yml` unter 
 > Bereits installierte Systeme brauchen keine neue ISO: Sie bekommen Ubuntus
 > Updates ganz normal über die Aktualisierungsverwaltung bzw. Discover.
 
+## ISO automatisch in Google Drive (optional)
+
+Nach jedem Build kann GitHub die **komplette ISO als eine Datei** in den Ordner
+„Noi OS“ in deinem Google Drive legen (die neuesten 3 bleiben).
+
+1. `rclone` installieren (Fedora: `sudo dnf install rclone`, Ubuntu: `sudo apt install rclone`)
+2. `rclone config` → `n` (neu) → Name `gdrive` → Speicher **Google Drive** →
+   client_id/secret leer lassen → Berechtigung **drive.file** →
+   „Edit advanced config?“ `n` → „Use web browser?“ `y` → im Browser anmelden und erlauben →
+   „Shared Drive?“ `n` → `y` (speichern) → `q`
+3. `rclone config show gdrive` – die gesamte Ausgabe (ab `[gdrive]`) kopieren
+4. GitHub: Repo → **Settings → Secrets and variables → Actions → New repository secret**,
+   Name `RCLONE_CONFIG`, als Wert die kopierte Ausgabe einfügen
+
+**drive.file** bedeutet: GitHub sieht nur die Dateien, die es selbst hochgeladen hat –
+nicht den Rest deines Drives.
+
 ## Fertige VM (VirtualBox, VMware, Proxmox, Hyper-V …)
 
 Wer Noi OS nicht erst installieren will, nimmt ein **fertiges VM-Image** aus den
