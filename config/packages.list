@@ -69,6 +69,7 @@ hunspell-de-de
 ufw
 plasma-firewall
 systemd-zram-generator
+cloud-guest-utils
 
 # --- VM-Gastwerkzeuge (aktivieren sich nur in der jeweiligen VM-Software) ---
 # Fenstergröße anpassen, Copy & Paste mit dem Host, sauberes Herunterfahren

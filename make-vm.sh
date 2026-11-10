@@ -175,6 +175,39 @@ EOF
 chroot "$MNT" /bin/bash /tmp/vm-setup.sh
 rm -f "$MNT/tmp/vm-setup.sh"
 [[ ${CREATED_UUID_LINK:-0} == 1 ]] && rm -f "$UUID_LINK"
+
+# Größere virtuelle Festplatte? Beim Start System-Partition automatisch
+# mitwachsen lassen (z. B. nach "Festplatte vergrößern" in VirtualBox/Proxmox).
+cat > "$MNT/usr/local/sbin/noios-grow-root" <<'GROW'
+#!/bin/sh
+# Noi OS: System-Partition an die Größe der (virtuellen) Festplatte anpassen.
+set -u
+src="$(findmnt -no SOURCE /)" || exit 0
+part="$(basename "$src")"
+disk="$(lsblk -no PKNAME "$src")" || exit 0
+num="$(cat "/sys/class/block/$part/partition" 2>/dev/null)" || exit 0
+[ -n "$disk" ] && [ -n "$num" ] || exit 0
+if growpart "/dev/$disk" "$num"; then
+    resize2fs "$src"
+fi
+exit 0
+GROW
+chmod 755 "$MNT/usr/local/sbin/noios-grow-root"
+cat > "$MNT/etc/systemd/system/noios-grow-root.service" <<'UNIT'
+[Unit]
+Description=Noi OS: System-Partition an Festplattengröße anpassen
+After=local-fs.target
+ConditionVirtualization=vm
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/noios-grow-root
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+ln -sf /etc/systemd/system/noios-grow-root.service \
+    "$MNT/etc/systemd/system/multi-user.target.wants/noios-grow-root.service"
 # Sicherheitsnetz: im Bootmenü darf kein Build-Gerätename stehen
 if grep -q "root=/dev/loop" "$MNT/boot/grub/grub.cfg"; then
     die "grub.cfg enthält root=/dev/loop… statt UUID"
