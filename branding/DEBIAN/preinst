@@ -1,0 +1,8 @@
+#!/bin/sh
+# os-release gehört zu base-files. Per dpkg-divert ersetzen wir es sauber,
+# sodass Updates von base-files unsere Version nicht überschreiben.
+set -e
+if [ "$1" = install ] || [ "$1" = upgrade ]; then
+    dpkg-divert --package @DISTRO_ID@-branding --add --rename \
+        --divert /usr/lib/os-release.ubuntu /usr/lib/os-release
+fi

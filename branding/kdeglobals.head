@@ -1,0 +1,7 @@
+[KDE]
+LookAndFeelPackage=org.noios.desktop
+widgetStyle=Breeze
+
+[Icons]
+Theme=breeze-dark
+

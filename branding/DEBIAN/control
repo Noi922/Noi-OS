@@ -1,0 +1,10 @@
+Package: @DISTRO_ID@-branding
+Version: @DISTRO_VERSION@
+Architecture: all
+Maintainer: @DISTRO_NAME@ Team <noreply@example.org>
+Depends: base-files
+Section: misc
+Priority: optional
+Description: Branding und Standard-Einstellungen für @DISTRO_NAME@
+ Camouflage-Hintergrundbild, Logo, Farbschema "Noi Camo", os-release,
+ sowie Plasma-, SDDM- und Calamares-Branding für @DISTRO_NAME@.

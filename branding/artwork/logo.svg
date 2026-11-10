@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 100 100">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#6b7a3f"/>
+      <stop offset="1" stop-color="#2a3520"/>
+    </linearGradient>
+    <clipPath id="c"><circle cx="50" cy="50" r="46"/></clipPath>
+  </defs>
+  <circle cx="50" cy="50" r="46" fill="url(#bg)"/>
+  <!-- angedeutete Camo-Flecken -->
+  <g clip-path="url(#c)" opacity="0.55">
+    <path fill="#4b5d2e" d="M5,30 C18,18 30,26 36,16 C44,4 60,10 58,22 C56,32 40,30 34,40 C26,52 10,46 5,30Z"/>
+    <path fill="#8a9a5b" d="M60,64 C70,54 86,58 92,68 C98,80 84,92 72,88 C62,85 54,72 60,64Z" opacity="0.6"/>
+    <path fill="#1c2416" d="M14,70 C22,62 34,68 32,78 C30,88 16,90 12,82 C10,77 10,74 14,70Z"/>
+  </g>
+  <!-- stilisiertes "N" mit Blatt -->
+  <path d="M32,72 V30 L68,72 V40" fill="none" stroke="#e3e9c4" stroke-width="9"
+        stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M68,34 C68,22 78,16 86,16 C86,26 80,34 68,34Z" fill="#c9d3a0"/>
+  <circle cx="50" cy="50" r="46" fill="none" stroke="#c9d3a0" stroke-opacity="0.35" stroke-width="2"/>
+</svg>

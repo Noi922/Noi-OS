@@ -1,0 +1,35 @@
+---
+componentName:  noios
+
+welcomeStyleCalamares:   false
+welcomeExpandingLogo:    true
+windowExpanding:    normal
+windowSize: 1024px,640px
+windowPlacement: center
+
+strings:
+    productName:         "@DISTRO_NAME@"
+    shortProductName:    "@DISTRO_NAME@"
+    version:             "@DISTRO_VERSION@"
+    shortVersion:        "@DISTRO_VERSION@"
+    versionedName:       "@DISTRO_NAME@ @DISTRO_VERSION@"
+    shortVersionedName:  "@DISTRO_NAME@ @DISTRO_VERSION@"
+    bootloaderEntryName: "@DISTRO_NAME@"
+    productUrl:          "@HOME_URL@"
+    supportUrl:          "@SUPPORT_URL@"
+    knownIssuesUrl:      "@BUG_URL@"
+    releaseNotesUrl:     "@HOME_URL@"
+
+images:
+    productLogo:         "logo.png"
+    productIcon:         "logo.png"
+    productWelcome:      "welcome.png"
+
+slideshow:               "show.qml"
+slideshowAPI:            1
+
+style:
+   SidebarBackground:        "#242a1e"
+   SidebarText:              "#e2e6d4"
+   SidebarTextCurrent:       "#ffffff"
+   SidebarBackgroundCurrent: "#6b8a30"

@@ -1,0 +1,15 @@
+{
+    "KPackageStructure": "Plasma/LookAndFeel",
+    "KPlugin": {
+        "Authors": [ { "Name": "@DISTRO_NAME@ Team" } ],
+        "Category": "",
+        "Description": "Camouflage-Grün – das Standard-Design von @DISTRO_NAME@",
+        "Description[de]": "Camouflage-Grün – das Standard-Design von @DISTRO_NAME@",
+        "Id": "org.noios.desktop",
+        "License": "GPL-2.0+",
+        "Name": "@DISTRO_NAME@ Camo",
+        "Version": "@DISTRO_VERSION@",
+        "Website": "@HOME_URL@"
+    },
+    "X-Plasma-APIVersion": "2"
+}

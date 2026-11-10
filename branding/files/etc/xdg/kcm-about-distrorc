@@ -1,0 +1,4 @@
+[General]
+LogoPath=/usr/share/noi-os/logo.svg
+Website=@HOME_URL@
+Variant=@DISTRO_VERSION@ „@DISTRO_CODENAME@“ – basiert auf Ubuntu @UBUNTU_VERSION@ LTS

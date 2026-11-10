@@ -1,0 +1,69 @@
+# Pakete, die in Noi OS installiert werden. Eine Zeile = ein Paket,
+# '#' leitet einen Kommentar ein.
+
+# --- Basis -----------------------------------------------------------------
+ubuntu-minimal
+ubuntu-standard
+linux-generic
+casper
+discover
+laptop-detect
+os-prober
+locales
+language-pack-de
+language-pack-kde-de
+network-manager
+efibootmgr
+grub-efi-amd64-signed
+grub-efi-amd64-bin
+grub-pc-bin
+grub2-common
+shim-signed
+mtools
+sudo
+curl
+ca-certificates
+gnupg
+
+# --- KDE Plasma ------------------------------------------------------------
+kde-plasma-desktop
+plasma-workspace-wayland
+sddm
+sddm-theme-breeze
+kde-config-sddm
+plasma-nm
+plasma-pa
+bluedevil
+powerdevil
+kscreen
+print-manager
+cups
+pipewire-audio
+breeze-gtk-theme
+kde-config-gtk-style
+fonts-noto
+fonts-noto-color-emoji
+
+# --- Programme -------------------------------------------------------------
+dolphin
+konsole
+kate
+ark
+okular
+gwenview
+spectacle
+kcalc
+partitionmanager
+vlc
+plasma-discover
+plasma-discover-backend-flatpak
+flatpak
+# Firefox wird separat aus Mozillas APT-Repo installiert (siehe config.sh)
+libreoffice-plasma
+libreoffice-l10n-de
+libreoffice-help-de
+hunspell-de-de
+
+# --- Installer -------------------------------------------------------------
+calamares
+calamares-settings-kubuntu
