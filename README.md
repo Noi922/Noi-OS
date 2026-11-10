@@ -120,6 +120,7 @@ sudo dd if=out/noios-1.0-amd64.iso of=/dev/sdX bs=4M status=progress oflag=sync
 ```
 
 Oder ganz bequem mit [Ventoy](https://www.ventoy.net) bzw. balenaEtcher.
+Die ISO startet per BIOS und UEFI, **auch mit aktivem Secure Boot**.
 
 ## Anpassen
 
@@ -138,9 +139,6 @@ neu aufgesetzt, denn das Branding wird im chroot installiert.
 
 ## Bekannte Einschränkungen / nächste Schritte
 
-- **Secure Boot:** Die ISO wird mit `grub-mkrescue` gebaut und ist nicht signiert.
-  Für den Live-Start muss Secure Boot im BIOS **aus** sein. Das installierte System
-  bekommt dagegen Ubuntus signiertes shim/GRUB.
 - **Eigenes Update-Repository:** Für Updates des Branding-Pakets lohnt sich später
   ein eigenes APT-Repo (z. B. mit `reprepro` oder `aptly`, gehostet auf GitHub Pages).
 - `HOME_URL` & Co. in `config.sh` zeigen noch auf `example.org`.

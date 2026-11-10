@@ -164,10 +164,56 @@ stage_iso() {
     rsvg-convert -w 1024 -h 768 --keep-aspect-ratio -o "$IMAGE/boot/grub/background.png" "$tmp/boot.svg"
     rm -rf "$tmp"
 
-    (cd "$IMAGE" && find . -type f ! -name md5sum.txt -print0 | xargs -0 md5sum > md5sum.txt)
-
     mkdir -p "$OUTDIR"
-    grub-mkrescue -o "$OUTDIR/$ISO_NAME" "$IMAGE" -- -volid "$ISO_LABEL"
+    local SHIM GRUBCD MM
+    SHIM="$CHROOT$(chroot "$CHROOT" readlink -f /usr/lib/shim/shimx64.efi.signed 2>/dev/null || true)"
+    GRUBCD="$CHROOT/usr/lib/grub/x86_64-efi-signed/gcdx64.efi.signed"
+    MM="$CHROOT/usr/lib/shim/mmx64.efi"
+
+    if [[ -f $SHIM && -f $GRUBCD && -f $MM ]]; then
+        # --- Secure-Boot-fähige ISO -------------------------------------------
+        # BIOS-Teil (eltorito.img, Module, Schriften) liefert grub-mkrescue;
+        # für UEFI nehmen wir Ubuntus von Microsoft signiertes shim + die
+        # signierte CD-Variante von GRUB. Damit startet die ISO auch mit
+        # aktivem Secure Boot.
+        local base="$WORK/iso-base.iso" efi="$WORK/efi.img"
+        grub-mkrescue -o "$base" "$IMAGE" -- -volid "$ISO_LABEL" 2>/dev/null
+        xorriso -osirrox on -indev "$base" -extract /boot/grub "$IMAGE/boot/grub" 2>/dev/null
+        chmod -R u+w "$IMAGE/boot/grub"
+        rm -f "$base"
+
+        mkdir -p "$IMAGE/EFI/BOOT"
+        cp "$SHIM"   "$IMAGE/EFI/BOOT/BOOTX64.EFI"
+        cp "$GRUBCD" "$IMAGE/EFI/BOOT/grubx64.efi"
+        cp "$MM"     "$IMAGE/EFI/BOOT/mmx64.efi"
+
+        rm -f "$efi"
+        truncate -s 10M "$efi"
+        mkfs.vfat -n NOIOS_EFI "$efi" >/dev/null
+        export MTOOLS_SKIP_CHECK=1
+        mmd -i "$efi" ::/EFI ::/EFI/BOOT
+        mcopy -i "$efi" "$IMAGE/EFI/BOOT/BOOTX64.EFI" "$IMAGE/EFI/BOOT/grubx64.efi" \
+            "$IMAGE/EFI/BOOT/mmx64.efi" ::/EFI/BOOT/
+        cp "$efi" "$IMAGE/boot/grub/efi.img"
+
+        (cd "$IMAGE" && find . -type f ! -name md5sum.txt -print0 | xargs -0 md5sum > md5sum.txt)
+
+        xorriso -as mkisofs -r -J -joliet-long -V "$ISO_LABEL" \
+            -o "$OUTDIR/$ISO_NAME" \
+            --grub2-mbr /usr/lib/grub/i386-pc/boot_hybrid.img \
+            --protective-msdos-label -partition_offset 16 \
+            -c boot/boot.cat \
+            -b boot/grub/i386-pc/eltorito.img -no-emul-boot \
+            -boot-load-size 4 -boot-info-table --grub2-boot-info \
+            -eltorito-alt-boot -e boot/grub/efi.img -no-emul-boot \
+            -append_partition 2 0xef "$efi" -appended_part_as_gpt \
+            "$IMAGE"
+        rm -f "$efi"
+    else
+        echo "WARNUNG: signiertes shim/GRUB fehlt – ISO ohne Secure-Boot-Unterstützung" >&2
+        (cd "$IMAGE" && find . -type f ! -name md5sum.txt -print0 | xargs -0 md5sum > md5sum.txt)
+        grub-mkrescue -o "$OUTDIR/$ISO_NAME" "$IMAGE" -- -volid "$ISO_LABEL"
+    fi
     (cd "$OUTDIR" && sha256sum "$ISO_NAME" > "$ISO_NAME.sha256")
     log "Fertig: $OUTDIR/$ISO_NAME ($(du -h "$OUTDIR/$ISO_NAME" | cut -f1))"
 }

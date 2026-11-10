@@ -33,7 +33,7 @@ Prüfsummen stehen in `SHA256SUMS`.
 
 ## Tipps
 
-- **USB-Stick:** ISO mit [Ventoy](https://www.ventoy.net) oder [balenaEtcher](https://etcher.balena.io) schreiben. Den Live-Start mit Secure Boot im BIOS **aus** starten.
+- **USB-Stick:** ISO mit [Ventoy](https://www.ventoy.net) oder [balenaEtcher](https://etcher.balena.io) schreiben. Startet auch mit aktivem Secure Boot.
 - **VirtualBox:** Nach dem Import unter *Anzeige* den Grafikcontroller **VMSVGA** wählen und mindestens 128 MB Grafikspeicher einstellen.
 - **Hyper-V:** VM der *Generation 2* anlegen und unter *Sicherheit* die Vorlage „**Microsoft UEFI-Zertifizierungsstelle**“ wählen. Alternativ *Generation 1* nehmen.
 - **Proxmox:** `qm importdisk <vmid> @BASE@.qcow2 <storage>`, danach die Festplatte anhängen und als Boot-Laufwerk setzen.
