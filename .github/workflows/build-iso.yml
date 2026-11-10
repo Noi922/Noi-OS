@@ -86,6 +86,8 @@ jobs:
             fi
           done
           (cd upload && sha256sum ./*.part* >> SHA256SUMS 2>/dev/null || true)
+          # Doppelklick-Helfer für Windows zum Zusammenfügen der Teile
+          cp "$GITHUB_WORKSPACE/tools/Noi-OS-zusammenfuegen.bat" upload/
           ls -lh upload
           echo "dir=$NOI_OUT/upload" >> "$GITHUB_OUTPUT"
           echo "base=${DISTRO_ID}-${DISTRO_VERSION}-${ARCH}" >> "$GITHUB_OUTPUT"

@@ -18,7 +18,11 @@ Danach startet Noi OS ganz normal.
 GitHub erlaubt höchstens 2 GB pro Datei, deshalb sind große Dateien geteilt.
 Lade **alle Teile** einer Datei herunter und füge sie zusammen:
 
-**Windows** (Eingabeaufforderung im Download-Ordner), Beispiel für die OVA:
+**Windows, ganz einfach:** `Noi-OS-zusammenfuegen.bat` mit in den Download-Ordner
+laden und **doppelklicken** – fertig. (Windows fragt evtl. nach: „Weitere
+Informationen“ → „Trotzdem ausführen“.)
+
+**Windows, von Hand** (Eingabeaufforderung im Download-Ordner), Beispiel für die OVA:
 ```
 copy /b @BASE@.ova.part00 + @BASE@.ova.part01 @BASE@.ova
 ```
