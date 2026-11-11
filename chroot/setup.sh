@@ -117,6 +117,11 @@ if [[ "$FIREFOX_FROM_MOZILLA" == yes ]]; then
 fi
 "${APT[@]}" install "${PKGS[@]}"
 
+log "Flathub als App-Quelle einrichten (Discover)"
+flatpak remote-add --system --if-not-exists flathub \
+    https://dl.flathub.org/repo/flathub.flatpakrepo \
+    || log "WARNUNG: Flathub konnte nicht eingerichtet werden (kein Netz?)"
+
 log "Branding-Paket installieren"
 "${APT[@]}" install "$B"/"${DISTRO_ID}"-branding_*.deb
 
@@ -149,6 +154,8 @@ mkdir -p "$xdg"
 printf "\n[Daemon]\nAutolock=false\nLockOnResume=false\nTimeout=0\n" >> "$xdg/kscreenlockerrc"
 printf "[Basic Settings]\nIndexing-Enabled=false\n" >> "$xdg/baloofilerc"
 printf "[Wallet]\nEnabled=false\n" >> "$xdg/kwalletrc"
+# Willkommens-Assistent erst nach der Installation, nicht im Live-System
+rm -f /root/etc/xdg/autostart/org.kde.plasma-welcome.desktop
 log_end_msg
 EOF
 chmod 755 /usr/share/initramfs-tools/scripts/casper-bottom/34noios_live_settings
@@ -217,6 +224,12 @@ rm -rf "$CAL/branding/kubuntu"
 log "Firewall aktivieren"
 sed -i 's/^DEFAULT_INPUT_POLICY=.*/DEFAULT_INPUT_POLICY="DROP"/' /etc/default/ufw
 sed -i 's/^DEFAULT_OUTPUT_POLICY=.*/DEFAULT_OUTPUT_POLICY="ACCEPT"/' /etc/default/ufw
+# KDE Connect (Handy koppeln: Dateien, Benachrichtigungen, Zwischenablage)
+# braucht die Ports 1714-1764 im lokalen Netz. Regeln vor dem Aktivieren
+# eintragen – dann schreibt ufw nur die Dateien und braucht kein iptables.
+sed -i 's/^ENABLED=.*/ENABLED=no/' /etc/ufw/ufw.conf
+ufw allow 1714:1764/udp comment 'KDE Connect' >/dev/null
+ufw allow 1714:1764/tcp comment 'KDE Connect' >/dev/null
 sed -i 's/^ENABLED=.*/ENABLED=yes/' /etc/ufw/ufw.conf
 systemctl enable ufw.service >/dev/null 2>&1 || true
 
@@ -227,7 +240,19 @@ echo "${DISTRO_NAME} ${DISTRO_VERSION}" > /etc/issue.net
 # DISTRIB_ID/CODENAME bleiben Ubuntu/noble, damit PPAs & Co. weiter funktionieren.
 sed -i "s/^DISTRIB_DESCRIPTION=.*/DISTRIB_DESCRIPTION=\"${DISTRO_NAME} ${DISTRO_VERSION} (basiert auf Ubuntu ${UBUNTU_VERSION} LTS)\"/" /etc/lsb-release
 chmod -x /etc/update-motd.d/10-help-text 2>/dev/null || true
-sed -i "s/^GRUB_DISTRIBUTOR=.*/GRUB_DISTRIBUTOR=\"${DISTRO_NAME}\"/" /etc/default/grub 2>/dev/null || true
+# GRUB_DISTRIBUTOR muss "Ubuntu" bleiben: shim-signed/grub-install leiten daraus
+# den EFI-Ordner ab (EFI/<erstes Wort>). Das signierte GRUB sucht seine
+# Konfiguration fest in EFI/ubuntu – mit "Noi OS" landete ein späteres
+# shim-/GRUB-Update in EFI/noi (Startprobleme). Ubuntus /etc/default/grub
+# liest sonst NAME aus os-release ("Noi OS"), daher hier fest überschreiben.
+install -d /etc/default/grub.d
+cat > /etc/default/grub.d/10-noios.cfg <<'EOF'
+# Noi OS: technischer Name für den Bootloader (EFI-Ordner) – nicht ändern
+GRUB_DISTRIBUTOR="Ubuntu"
+EOF
+# Installer: GRUB_DISTRIBUTOR nicht mit dem Anzeigenamen überschreiben
+grep -q '^keep_distributor:' "$CAL/modules/grubcfg.conf" \
+    || echo 'keep_distributor: true' >> "$CAL/modules/grubcfg.conf"
 
 # --- initramfs mit casper neu bauen ----------------------------------------
 log "initramfs neu erzeugen"

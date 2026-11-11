@@ -34,6 +34,28 @@ for res in 3840x2160 2560x1440 1920x1080; do
 done
 render "$svg" 400 225 "$WP/screenshot.png"
 
+# Weitere Camo-Varianten zur Auswahl (Systemeinstellungen → Hintergrundbild)
+for v in "Wueste:wueste:Wüste" "Nacht:nacht:Nacht" "Winter:winter:Winter"; do
+    id="NoiCamo${v%%:*}"; rest="${v#*:}"; pal="${rest%%:*}"; label="${rest#*:}"
+    dir="$PKG/usr/share/wallpapers/$id/contents/images"
+    mkdir -p "$dir"
+    python3 "$ROOT/tools/make-camo-wallpaper.py" "$STAGE/$id.svg" --palette "$pal"
+    for res in 3840x2160 2560x1440 1920x1080; do
+        render "$STAGE/$id.svg" "${res%x*}" "${res#*x}" "$dir/$res.png"
+    done
+    render "$STAGE/$id.svg" 400 225 "$dir/../screenshot.png"
+    cat > "$PKG/usr/share/wallpapers/$id/metadata.json" <<EOF
+{
+    "KPlugin": {
+        "Authors": [ { "Name": "@DISTRO_NAME@ Team" } ],
+        "Id": "$id",
+        "License": "CC-BY-SA-4.0",
+        "Name": "Noi Camo $label"
+    }
+}
+EOF
+done
+
 LNF="$PKG/usr/share/plasma/look-and-feel/org.noios.desktop/contents/previews"
 mkdir -p "$LNF"
 render "$svg" 1920 1080 "$LNF/fullscreenpreview.png"

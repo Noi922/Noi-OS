@@ -13,16 +13,38 @@ import argparse
 import math
 import random
 
-# Farbpalette (dunkel -> hell). Wird auch fuer das Desktop-Theme verwendet.
-BASE = "#3b4a2a"          # Grundton: gedecktes Waldgruen
-LAYERS = [
-    ("#4b5d2e", 34, 0.20),  # Olivgruen       (Farbe, Anzahl Flecken, rel. Groesse)
-    ("#6b7a3f", 30, 0.16),  # helles Oliv
-    ("#8a9a5b", 22, 0.11),  # Salbei / Moos
-    ("#2a3520", 30, 0.10),  # Dunkles Tannengruen
-    ("#1c2416", 18, 0.06),  # Schattengruen (kleine Akzente)
-]
-TEXT_COLOR = "#c9d3a0"
+# Farbpaletten: Grundton, Fleck-Schichten (Farbe, Anzahl, rel. Groesse), Schrift.
+# "wald" ist das Standard-Design von Noi OS (passt zum Farbschema "Noi Camo").
+PALETTES = {
+    "wald": ("#3b4a2a", [
+        ("#4b5d2e", 34, 0.20),  # Olivgruen
+        ("#6b7a3f", 30, 0.16),  # helles Oliv
+        ("#8a9a5b", 22, 0.11),  # Salbei / Moos
+        ("#2a3520", 30, 0.10),  # Dunkles Tannengruen
+        ("#1c2416", 18, 0.06),  # Schattengruen (kleine Akzente)
+    ], "#c9d3a0"),
+    "wueste": ("#b39a6b", [
+        ("#c4ab7c", 34, 0.20),  # Sand
+        ("#9b7f52", 30, 0.16),  # Ocker
+        ("#d8c69c", 22, 0.11),  # heller Sand
+        ("#7a6141", 30, 0.10),  # Erdbraun
+        ("#57442d", 18, 0.06),  # dunkles Braun
+    ], "#f1e6c8"),
+    "nacht": ("#1a2016", [
+        ("#222a1d", 34, 0.20),
+        ("#2c3725", 30, 0.16),
+        ("#3a4830", 22, 0.11),
+        ("#12160f", 30, 0.10),
+        ("#0a0d08", 18, 0.06),
+    ], "#7d8f62"),
+    "winter": ("#c6cbc5", [
+        ("#dfe3de", 34, 0.20),
+        ("#a7aea6", 30, 0.16),
+        ("#f3f5f2", 22, 0.11),
+        ("#7b837a", 30, 0.10),
+        ("#4d544d", 18, 0.06),
+    ], "#3f463f"),
+}
 
 
 def blob_path(cx, cy, r, rng, points=None):
@@ -53,7 +75,8 @@ def blob_path(cx, cy, r, rng, points=None):
     return d + "Z"
 
 
-def make(width, height, seed, text):
+def make(width, height, seed, text, palette="wald"):
+    BASE, LAYERS, TEXT_COLOR = PALETTES[palette]
     rng = random.Random(seed)
     scale = min(width, height)
     out = [
@@ -116,9 +139,11 @@ def main():
     ap.add_argument("--height", type=int, default=2160)
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--no-text", action="store_true")
+    ap.add_argument("--palette", choices=sorted(PALETTES), default="wald",
+                    help="Farbvariante (Standard: wald)")
     a = ap.parse_args()
     with open(a.output, "w") as f:
-        f.write(make(a.width, a.height, a.seed, not a.no_text))
+        f.write(make(a.width, a.height, a.seed, not a.no_text, a.palette))
 
 
 if __name__ == "__main__":

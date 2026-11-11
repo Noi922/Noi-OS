@@ -59,11 +59,29 @@ vlc
 plasma-discover
 plasma-discover-backend-flatpak
 flatpak
+kdeconnect
+skanpage
+7zip
 # Firefox wird separat aus Mozillas APT-Repo installiert (siehe config.sh)
 libreoffice-plasma
 libreoffice-l10n-de
 libreoffice-help-de
 hunspell-de-de
+
+# --- Multimedia: Videos & Musik (MP3, MP4/H.264, …) direkt abspielen ---------
+gstreamer1.0-libav
+gstreamer1.0-plugins-good
+gstreamer1.0-plugins-bad
+gstreamer1.0-plugins-ugly
+libavcodec-extra
+# Vorschaubilder für Videos, PDFs & Co. in Dolphin, Netzwerk-/Cloud-Zugriff
+ffmpegthumbs
+kdegraphics-thumbnailers
+kio-extras
+
+# --- Erste Schritte & Sicherung ----------------------------------------------
+plasma-welcome
+timeshift
 
 # --- Sicherheit & System ---------------------------------------------------
 ufw

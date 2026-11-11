@@ -12,13 +12,19 @@ Sicherheitsupdates bis 2029.
 
 | Bereich | Noi OS |
 |---|---|
-| Basis | Ubuntu 24.04 LTS, alle Ubuntu-Paketquellen |
+| Basis | Ubuntu 24.04 LTS, alle Ubuntu-Paketquellen, Sicherheitsupdates bis 2029 |
 | Desktop | KDE Plasma 5.27 (X11 + Wayland) |
-| Design | eigenes Camo-Hintergrundbild, Farbschema „Noi Camo“, Breeze Dark, grünes Logo, eigene Boot-Animation |
-| Installer | Calamares mit eigenem Branding und eigener Diashow |
-| Pakete | **kein Snap** (gesperrt), stattdessen `.deb` + **Flatpak** in Discover |
-| Firefox | als `.deb` direkt aus Mozillas APT-Repository |
-| Vorinstalliert | Firefox, LibreOffice, VLC, Dolphin, Kate, Okular, Gwenview, Spectacle u. a. |
+| Design | eigenes Camo-Hintergrundbild (Wald, Wüste, Nacht, Winter), Farbschema „Noi Camo“, eigene Boot-Animation und Logo |
+| Installer | Calamares mit eigenem Branding, Vollbild |
+| Fertige VMs | `.ova`, `.qcow2`, `.vhdx` – beim ersten Start eigenes Konto anlegen |
+| Programme | Firefox (direkt von Mozilla), LibreOffice, VLC, Dolphin, Kate, Okular, Gwenview, Spectacle, Skanpage, 7-Zip |
+| Multimedia | MP3, MP4/H.264 & Co. laufen sofort (GStreamer- und FFmpeg-Codecs) |
+| Apps | **kein Snap**, dafür `.deb` und **Flatpak mit Flathub** direkt in Discover |
+| Handy | **KDE Connect**: Dateien, Benachrichtigungen und Zwischenablage mit dem Handy teilen |
+| Sicherheit | automatische Sicherheitsupdates (auch Firefox), Firewall aktiv, Secure Boot, AppArmor |
+| System | zram (schneller Auslagerungsspeicher), Timeshift für Sicherungen, Willkommens-Assistent |
+| VM-Unterstützung | Gastwerkzeuge für VirtualBox, VMware, KVM/Proxmox und Hyper-V |
+| Qualität | jeder Build wird automatisch in einer VM getestet (Start, Desktop, Internet, Firewall) |
 | Sprache | Deutsch, Tastatur `de`, Zeitzone Europe/Berlin (in `config.sh` änderbar) |
 
 ## Projektstruktur
@@ -98,6 +104,14 @@ Selbst bauen (nach `./build.sh`):
 sudo ./make-vm.sh                       # alle Formate
 sudo VM_FORMATS=qcow2 ./make-vm.sh      # nur eines
 ```
+
+## Tipps für VirtualBox
+
+- **Ändern → Anzeige → Grafikcontroller: VMSVGA**, Grafikspeicher **128 MB**
+- Im laufenden VM-Fenster: **Anzeige → Automatische Anpassung der Gastanzeige** anhaken
+- Wirkt alles zu groß? **Anzeige → Virtueller Bildschirm 1 → Skaliere auf 100 %**
+  (VirtualBox vergrößert sonst auf Laptops mit Windows-Skalierung alles mit)
+- Netzwerk: **NAT** (Standard) genügt – Noi OS verbindet sich automatisch
 
 ## ISO selbst bauen
 

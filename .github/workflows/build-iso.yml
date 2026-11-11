@@ -60,6 +60,32 @@ jobs:
       - name: ISO bauen
         run: sudo --preserve-env=NOI_WORK,NOI_OUT ./build.sh
 
+      - name: ISO in VM testen (Start, Desktop, Internet, Firewall …)
+        run: |
+          sudo apt-get install -y -qq qemu-system-x86 ovmf >/dev/null
+          # KVM für schnelle VMs freischalten
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules >/dev/null
+          sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm
+          source config.sh
+          python3 tools/vm-test.py "$NOI_OUT/$ISO_NAME" vm-test --timeout 900
+
+      - name: Testbericht anzeigen
+        if: always()
+        run: |
+          [ -f vm-test/bericht.md ] && cat vm-test/bericht.md >> "$GITHUB_STEP_SUMMARY" || true
+
+      - name: Test-Screenshots speichern
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vm-test-screenshots
+          path: |
+            vm-test/*.png
+            vm-test/bericht.md
+          if-no-files-found: ignore
+          retention-days: 30
+
       - name: VM-Images bauen
         if: env.BUILD_VM == 'true'
         run: |
