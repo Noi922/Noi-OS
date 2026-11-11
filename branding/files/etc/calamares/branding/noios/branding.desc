@@ -3,8 +3,8 @@ componentName:  noios
 
 welcomeStyleCalamares:   false
 welcomeExpandingLogo:    true
-windowExpanding:    normal
-windowSize: 1024px,640px
+windowExpanding:    fullscreen
+windowSize: 800px,520px
 windowPlacement: center
 
 strings:

@@ -177,26 +177,38 @@ if [[ -f /usr/share/applications/kubuntu-calamares.desktop ]]; then
            /usr/share/applications/kubuntu-calamares.desktop
 fi
 sed -i "s/-u kubuntu /-u ${LIVE_USER} /" /usr/bin/calamares-launch-normal 2>/dev/null || true
-# Installer-Verknüpfung nur in der Live-Sitzung auf den Desktop legen
-# (prüft boot=casper, ist daher auf dem installierten System wirkungslos)
-cat > /usr/local/bin/noios-live-desktop <<'EOF'
-#!/bin/sh
-grep -qw 'boot=casper' /proc/cmdline || exit 0
-src=/usr/share/applications/kubuntu-calamares.desktop
-[ -f "$src" ] || exit 0
-desk="$(xdg-user-dir DESKTOP 2>/dev/null || echo "$HOME/Desktop")"
-mkdir -p "$desk"
-install -m 755 "$src" "$desk/installieren.desktop"
+# Das Installer-Symbol auf dem Live-Desktop legt casper selbst an
+# (casper-bottom/25adduser kopiert kubuntu-calamares.desktop). Ein eigener
+# Starter würde es doppelt anzeigen – daher keiner mehr.
+rm -f /usr/local/bin/noios-live-desktop /etc/xdg/autostart/noios-live-desktop.desktop
+# Weitere Installer-Einträge im Startmenü ausblenden, damit es nur einen
+# gibt ("Install Noi OS"); "Install System" und Kubuntus OEM-Modus verwirren.
+for f in /usr/share/applications/calamares.desktop \
+         /usr/share/applications/calamares-launch-oem.desktop; do
+    [[ -f $f ]] && { grep -q '^NoDisplay=' "$f" && sed -i 's/^NoDisplay=.*/NoDisplay=true/' "$f" \
+                     || sed -i '/^\[Desktop Entry\]/a NoDisplay=true' "$f"; }
+done
+# Lubuntu-Reste im Willkommensbildschirm ersetzen
+sed -i -e 's|^showDonateUrl:.*|showDonateUrl: false|' \
+       -e 's|^\(\s*internetCheckUrl:\).*|\1 http://connectivity-check.ubuntu.com|' \
+       "$CAL/modules/welcome.conf"
+
+# --- Netzwerk: NetworkManager soll ALLE Netzwerkkarten verwalten -------------
+# Ubuntu lässt Kabel-Netzwerk sonst "unverwaltet" (nur WLAN/Mobilfunk aktiv);
+# das Ubuntu-Desktop-Setup behebt das per Netplan – hier fehlte das, daher
+# gab es z. B. in VirtualBox (NAT, Kabel) kein Internet.
+log "Netzwerk: NetworkManager für alle Netzwerkkarten"
+install -d -m 755 /etc/netplan
+cat > /etc/netplan/01-network-manager-all.yaml <<'EOF'
+# Noi OS: alle Netzwerkgeräte über NetworkManager verwalten
+network:
+  version: 2
+  renderer: NetworkManager
 EOF
-chmod 755 /usr/local/bin/noios-live-desktop
-cat > /etc/xdg/autostart/noios-live-desktop.desktop <<'EOF'
-[Desktop Entry]
-Type=Application
-Name=Noi OS Live-Installer-Verknüpfung
-Exec=/usr/local/bin/noios-live-desktop
-NoDisplay=true
-OnlyShowIn=KDE;
-EOF
+chmod 600 /etc/netplan/01-network-manager-all.yaml
+# Zusätzlich (unabhängig von Netplan): Ubuntus Sperrliste überschreiben
+install -d /etc/NetworkManager/conf.d
+: > /etc/NetworkManager/conf.d/10-globally-managed-devices.conf
 rm -rf "$CAL/branding/kubuntu"
 
 # --- Firewall: eingehende Verbindungen blockieren, ausgehende erlauben ------
