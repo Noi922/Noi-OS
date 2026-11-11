@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Noi OS: Bildschirm-Skalierung
+Comment=Passt die Anzeige einmalig an die Pixeldichte des Bildschirms an
+Exec=/usr/bin/noios-autoscale
+NoDisplay=true
+OnlyShowIn=KDE;
+X-KDE-autostart-phase=2

@@ -120,6 +120,7 @@ done
 # --- Paket bauen -----------------------------------------------------------
 find "$PKG" -type d -exec chmod 755 {} +
 find "$PKG" -type f ! -path '*/DEBIAN/p*' -exec chmod 644 {} +
+chmod 755 "$PKG"/usr/bin/*
 DEB="$OUT/${DISTRO_ID}-branding_${DISTRO_VERSION}_all.deb"
 dpkg-deb --root-owner-group -Zxz --build "$PKG" "$DEB" >/dev/null
 echo "$DEB"

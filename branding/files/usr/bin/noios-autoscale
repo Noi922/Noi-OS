@@ -1,0 +1,203 @@
+#!/usr/bin/env python3
+"""Noi OS: Bildschirm-Skalierung automatisch an die Pixeldichte anpassen.
+
+Läuft beim Anmelden (Autostart). Pro Bildschirm-Kombination nur einmal:
+berechnet aus Auflösung und physischer Größe die Pixeldichte (DPI) und wählt
+100/125/150/200/250 % – ähnlich wie Windows. Danach wird nichts mehr
+verändert, bis ein anderer Bildschirm angeschlossen wird; eigene Einstellungen
+(Systemeinstellungen → Anzeige) bleiben also erhalten.
+
+- In virtuellen Maschinen: keine Skalierung (dort passt sich stattdessen die
+  Auflösung an das Fenster an – über die VM-Gastwerkzeuge).
+- X11: Einstellung wird gespeichert und wirkt ab der nächsten Anmeldung.
+- Wayland: wirkt sofort.
+
+  noios-autoscale            normaler Lauf (Autostart)
+  noios-autoscale --dry-run  nur anzeigen, was passieren würde
+  noios-autoscale --reset    Merker löschen, beim nächsten Lauf neu berechnen
+"""
+import json
+import os
+import shutil
+import subprocess
+import sys
+
+STATE_DIR = os.path.join(os.environ.get("XDG_STATE_HOME") or
+                         os.path.expanduser("~/.local/state"), "noios")
+STATE_FILE = os.path.join(STATE_DIR, "autoscale")
+
+
+def log(msg):
+    print(f"noios-autoscale: {msg}", file=sys.stderr)
+
+
+def recommend(dpi):
+    """Skalierung aus Pixeldichte – angelehnt an Windows-Standardwerte."""
+    if dpi < 125:
+        return 1.0
+    if dpi < 150:
+        return 1.25
+    if dpi < 190:
+        return 1.5
+    if dpi < 250:
+        return 2.0
+    return 2.5
+
+
+def in_vm():
+    try:
+        return subprocess.run(["systemd-detect-virt", "--vm", "--quiet"]).returncode == 0
+    except FileNotFoundError:
+        return False
+
+
+def live_session():
+    try:
+        with open("/proc/cmdline") as f:
+            return "boot=casper" in f.read().split()
+    except OSError:
+        return False
+
+
+def read_outputs():
+    """Liefert [(name, breite_px, höhe_px, breite_mm, höhe_mm, skala)]."""
+    out = subprocess.run(["kscreen-doctor", "-j"], capture_output=True, text=True,
+                         timeout=20).stdout
+    data = json.loads(out[out.index("{"):])
+    result = []
+    for o in data.get("outputs", []):
+        if not (o.get("enabled") and o.get("connected")):
+            continue
+        mode = next((m for m in o.get("modes", [])
+                     if str(m.get("id")) == str(o.get("currentModeId"))), None)
+        if not mode:
+            continue
+        size = mode.get("size") or {}
+        mm = o.get("sizeMM") or o.get("physicalSize") or {}
+        result.append((o.get("name", "?"), int(size.get("width", 0)),
+                       int(size.get("height", 0)), int(mm.get("width", 0)),
+                       int(mm.get("height", 0)), float(o.get("scale", 1.0))))
+    return result
+
+
+def kconfig_read(file, group, key):
+    tool = shutil.which("kreadconfig5") or shutil.which("kreadconfig6")
+    if not tool:
+        return ""
+    return subprocess.run([tool, "--file", file, "--group", group, "--key", key],
+                          capture_output=True, text=True).stdout.strip()
+
+
+def kconfig_write(file, group, key, value):
+    tool = shutil.which("kwriteconfig5") or shutil.which("kwriteconfig6")
+    subprocess.run([tool, "--file", file, "--group", group, "--key", key, str(value)],
+                   check=True)
+
+
+def notify(text):
+    subprocess.run(["notify-send", "-a", "Noi OS", "-i", "preferences-desktop-display",
+                    "Bildschirm angepasst", text], check=False)
+
+
+def main():
+    dry = "--dry-run" in sys.argv
+    if "--reset" in sys.argv:
+        if os.path.exists(STATE_FILE):
+            os.remove(STATE_FILE)
+        log("Merker gelöscht")
+        return 0
+
+    try:
+        outputs = read_outputs()
+    except Exception as e:  # noqa: BLE001 – Autostart darf nie stören
+        log(f"Bildschirme nicht lesbar: {e}")
+        return 0
+    if not outputs:
+        return 0
+
+    signature = ";".join(sorted(f"{n}:{w}x{h}:{mw}x{mh}" for n, w, h, mw, mh, _ in outputs))
+    try:
+        with open(STATE_FILE) as f:
+            if f.read().strip() == signature and not dry:
+                return 0          # diese Bildschirme kennen wir schon
+    except OSError:
+        first_run = True
+    else:
+        first_run = False
+
+    plan = []
+    for name, w, h, mw, mh, cur in outputs:
+        if mw < 100 or mw > 2000 or w <= 0:
+            log(f"{name}: keine verlässliche Größenangabe ({mw} mm) – übersprungen")
+            continue
+        dpi = w / (mw / 25.4)
+        plan.append((name, dpi, recommend(dpi), cur))
+        log(f"{name}: {w}x{h} px, {mw}x{mh} mm, {dpi:.0f} dpi -> {recommend(dpi):.0%}")
+
+    def remember():
+        if not dry:
+            os.makedirs(STATE_DIR, exist_ok=True)
+            with open(STATE_FILE, "w") as f:
+                f.write(signature + "\n")
+
+    if in_vm():
+        log("virtuelle Maschine – Auflösung passt sich ans Fenster an, keine Skalierung")
+        remember()
+        return 0
+    session = os.environ.get("XDG_SESSION_TYPE", "x11")
+
+    if session == "wayland":
+        changed = [(n, s) for n, _, s, cur in plan if abs(s - cur) > 0.01]
+        # Bei einem allerersten Lauf eine bereits selbst gewählte Skalierung respektieren
+        if first_run and any(abs(cur - 1.0) > 0.01 for *_, cur in plan):
+            changed = []
+        for n, s in changed:
+            log(f"setze {n} auf {s:.0%}")
+            if not dry:
+                subprocess.run(["kscreen-doctor", f"output.{n}.scale.{s:g}"], check=False)
+        remember()
+        if changed and not dry:
+            notify("Die Anzeige wurde an die Pixeldichte angepasst: "
+                   + ", ".join(f"{n} {s:.0%}" for n, s in changed)
+                   + ". Ändern unter Systemeinstellungen → Anzeige.")
+        return 0
+
+    # X11: eine gemeinsame Skalierung (Plasma 5 auf X11 kann nur global skalieren)
+    if live_session():
+        remember()           # im Live-System wäre eine Neuanmeldung nötig – auslassen
+        return 0
+    if not plan:
+        remember()
+        return 0
+    target = max(s for _, _, s, _ in plan)
+    current = kconfig_read("kdeglobals", "KScreen", "ScaleFactor") or "1"
+    try:
+        current = float(current)
+    except ValueError:
+        current = 1.0
+    if first_run and abs(current - 1.0) > 0.01:
+        log(f"eigene Skalierung {current:.0%} vorhanden – nicht verändert")
+        remember()
+        return 0
+    if abs(target - current) < 0.01:
+        remember()
+        return 0
+    log(f"X11: globale Skalierung {current:.0%} -> {target:.0%} (ab nächster Anmeldung)")
+    if not dry:
+        kconfig_write("kdeglobals", "KScreen", "ScaleFactor", f"{target:g}")
+        kconfig_write("kdeglobals", "KScreen", "ScreenScaleFactors",
+                      "".join(f"{n}={target:g};" for n, *_ in outputs))
+        kconfig_write("kcmfonts", "General", "forceFontDPI", int(round(96 * target)))
+        remember()
+        notify(f"Dein Bildschirm hat eine hohe Pixeldichte. Noi OS stellt die Anzeige "
+               f"auf {target:.0%} – das wird nach dem nächsten Ab- und Anmelden aktiv. "
+               f"Ändern unter Systemeinstellungen → Anzeige.")
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main())
+    except Exception as e:  # noqa: BLE001 – niemals die Anmeldung stören
+        log(f"Fehler: {e}")
+        sys.exit(0)

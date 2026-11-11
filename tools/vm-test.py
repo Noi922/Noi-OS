@@ -46,6 +46,52 @@ def ppm_to_png(ppm_path, png_path):
     return w, h, pix
 
 
+def png_decode(data):
+    """Minimaler PNG-Decoder (8 Bit RGB/RGBA, nicht interlaced) -> (w, h, rgb)."""
+    assert data[:8] == b"\x89PNG\r\n\x1a\n", "kein PNG"
+    pos, idat, w = 8, b"", 0
+    while pos < len(data):
+        ln = struct.unpack(">I", data[pos:pos + 4])[0]
+        tag, body = data[pos + 4:pos + 8], data[pos + 8:pos + 8 + ln]
+        if tag == b"IHDR":
+            w, h, depth, ctype = struct.unpack(">IIBB", body[:10])
+            assert depth == 8 and ctype in (2, 6), "PNG-Format nicht unterstützt"
+            bpp = 3 if ctype == 2 else 4
+        elif tag == b"IDAT":
+            idat += body
+        pos += 12 + ln
+    raw = zlib.decompress(idat)
+    stride = w * bpp
+    out = bytearray()
+    prev = bytearray(stride)
+    i = 0
+    for _ in range(h):
+        f = raw[i]
+        line = bytearray(raw[i + 1:i + 1 + stride])
+        i += 1 + stride
+        for x in range(stride):
+            a = line[x - bpp] if x >= bpp else 0
+            b = prev[x]
+            c = prev[x - bpp] if x >= bpp else 0
+            if f == 1:
+                line[x] = (line[x] + a) & 255
+            elif f == 2:
+                line[x] = (line[x] + b) & 255
+            elif f == 3:
+                line[x] = (line[x] + (a + b) // 2) & 255
+            elif f == 4:
+                pa, pb, pc = abs(b - c), abs(a - c), abs(a + b - 2 * c)
+                pr = a if pa <= pb and pa <= pc else (b if pb <= pc else c)
+                line[x] = (line[x] + pr) & 255
+        prev = line
+        if bpp == 3:
+            out += line
+        else:
+            for x in range(0, stride, 4):
+                out += line[x:x + 3]
+    return w, h, bytes(out)
+
+
 def camo_ratio(w, h, pix):
     """Anteil der Pixel, die nach Camo-Grün aussehen (Desktop-Hintergrund)."""
     hits = total = 0
@@ -219,10 +265,44 @@ def main():
                 break
         time.sleep(30)
         check("Plasma-Desktop läuft", desktop_ok)
-        img = screenshot("10-desktop")
-        if img:
-            ratio = camo_ratio(*img)
+        screenshot("10-desktop")
+        # Screenshot im System (zeigt genau, was der Nutzer sieht)
+        sess = ("p=$(pgrep -x plasmashell | head -1); u=$(ps -o user= -p $p); "
+                "uid=$(id -u $u); x=$(tr '\\0' '\\n' < /proc/$p/environ | grep '^XAUTHORITY=' | cut -d= -f2); "
+                "runuser -u $u -- env DISPLAY=:0 XAUTHORITY=$x XDG_RUNTIME_DIR=/run/user/$uid "
+                "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$uid/bus ")
+        ratio = None
+        for attempt in range(6):
+            code, out, err = qga.run(sess + "spectacle -b -n -f -o /tmp/noi-shot.png >/dev/null 2>&1; "
+                                     "base64 -w0 /tmp/noi-shot.png", timeout=120)
+            if code == 0 and out:
+                try:
+                    png = base64.b64decode(out)
+                    with open(os.path.join(a.outdir, "11-desktop-im-system.png"), "wb") as f:
+                        f.write(png)
+                    ratio = camo_ratio(*png_decode(png))
+                    if ratio > 0.25:
+                        break
+                except Exception as e:  # noqa: BLE001
+                    print(f"Screenshot-Auswertung: {e}", flush=True)
+            time.sleep(20)
+        if ratio is None:
+            check("Camo-Hintergrund sichtbar", False, "kein Screenshot im System möglich",
+                  required=False)
+        else:
             check("Camo-Hintergrund sichtbar", ratio > 0.25, f"{ratio:.0%} grüne Pixel")
+        code, out, _ = qga.run(sess + "kscreen-doctor -j", timeout=60)
+        try:
+            outs = json.loads(out[out.index("{"):]).get("outputs", [])
+            info = ", ".join(f"{o.get('name')}: sizeMM={o.get('sizeMM')}, scale={o.get('scale')}"
+                             for o in outs if o.get("enabled"))
+            check("Bildschirmdaten lesbar (kscreen-doctor)", bool(outs), info, required=False)
+        except Exception as e:  # noqa: BLE001
+            check("Bildschirmdaten lesbar (kscreen-doctor)", False, str(e)[:120], required=False)
+        code, out, _ = qga.run(sess + "noios-autoscale --dry-run 2>&1 | tail -3")
+        if out:
+            check("Automatische Skalierung", "Fehler" not in out, out.replace("\n", " / "),
+                  required=False)
 
         code, out, _ = qga.run("nmcli -t -f TYPE,STATE device | grep '^ethernet:connected'")
         check("Kabel-Netzwerk verbunden (NetworkManager)", code == 0, out or "nicht verbunden")
