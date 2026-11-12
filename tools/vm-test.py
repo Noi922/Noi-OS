@@ -338,6 +338,13 @@ def main():
         check("Nachtlicht voreingestellt", out == "Active=true", out, required=False)
         code, out, _ = qga.run("ls /usr/share/wallpapers | grep -c '^NoiCamo'")
         check("Camo-Hintergründe (4 Varianten)", out == "4", f"{out} gefunden", required=False)
+        code, out, _ = qga.run("for a in keepassxc filelight elisa kolourpaint gimp kamoso kpat; do "
+                               "command -v $a >/dev/null || echo $a; done")
+        check("Apps installiert (KeePassXC, GIMP, …)", out == "", "alle da" if not out else "fehlt: " + out.replace("\n", " "))
+        code, out, _ = qga.run("systemctl is-enabled noios-flatpak-update.timer")
+        check("Flatpak-Apps: wöchentliche Updates", out == "enabled", out, required=False)
+        code, out, _ = qga.run("ls /usr/share/color-schemes/NoiCamoHell.colors /usr/share/konsole/Noi.profile >/dev/null && echo ja")
+        check("Helles Farbschema + Konsole-Profil", out == "ja", out or "fehlt", required=False)
         code, out, _ = qga.run("command -v gamemoded >/dev/null && echo ja")
         check("GameMode installiert", out == "ja", out or "fehlt", required=False)
         code, out, _ = qga.run("systemctl --failed --no-legend --plain | awk '{print $1}' | tr '\\n' ' '")

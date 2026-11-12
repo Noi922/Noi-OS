@@ -1,0 +1,10 @@
+[Unit]
+Description=Noi OS: Flatpak-Apps wöchentlich aktualisieren
+
+[Timer]
+OnCalendar=weekly
+RandomizedDelaySec=6h
+Persistent=true
+
+[Install]
+WantedBy=timers.target

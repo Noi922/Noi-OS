@@ -127,6 +127,8 @@ flatpak remote-add --system --if-not-exists flathub \
 
 log "Branding-Paket installieren"
 "${APT[@]}" install "$B"/"${DISTRO_ID}"-branding_*.deb
+# Flatpak-Apps wöchentlich automatisch aktualisieren (Dienst aus dem Branding-Paket)
+systemctl enable noios-flatpak-update.timer
 
 # --- Live-System (casper) ----------------------------------------------------
 log "Live-System konfigurieren"

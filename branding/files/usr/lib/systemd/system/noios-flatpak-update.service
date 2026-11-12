@@ -1,0 +1,14 @@
+[Unit]
+Description=Noi OS: Flatpak-Apps aktualisieren
+Documentation=https://github.com/Noi922/Noi-OS
+Wants=network-online.target
+After=network-online.target
+ConditionPathExists=/usr/bin/flatpak
+# Nicht im Live-System
+ConditionKernelCommandLine=!boot=casper
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/flatpak update --system --noninteractive -y
+Nice=19
+IOSchedulingClass=idle

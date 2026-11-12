@@ -3,6 +3,7 @@
 #   noi update      alles aktualisieren (System, Flatpak-Apps, Firmware)
 #   noi info        Systeminformationen
 #   noi aufraeumen  Speicherplatz freigeben
+#   noi sicherung   Systemschnappschuss erstellen (Timeshift)
 #   noi hilfe       diese Übersicht
 set -uo pipefail
 
@@ -77,6 +78,25 @@ cmd_aufraeumen() {
              "– jetzt frei: $(menschlich "$nachher")"
 }
 
+cmd_sicherung() {
+    titel "Systemschnappschuss erstellen (Timeshift)"
+    if ! command -v timeshift >/dev/null; then
+        fehler "Timeshift ist nicht installiert"; return 1
+    fi
+    if [[ ! -s /etc/timeshift/timeshift.json ]]; then
+        hinweis "Timeshift ist noch nicht eingerichtet."
+        hinweis "Öffne einmal ${B}Startmenü → Timeshift${R}, wähle ${B}RSYNC${R} und die Festplatte –"
+        hinweis "danach erstellt ${B}noi sicherung${R} Schnappschüsse mit einem Befehl."
+        return 1
+    fi
+    if als_root timeshift --create --comments "noi sicherung $(date '+%d.%m.%Y %H:%M')" --tags O; then
+        ok "Schnappschuss erstellt – Zurückspringen: Startmenü → Timeshift"
+    else
+        fehler "Schnappschuss fehlgeschlagen"
+        return 1
+    fi
+}
+
 cmd_info() {
     local os kern de cpu ram disk up pk fp gpu sitzung
     # shellcheck disable=SC1091
@@ -132,6 +152,7 @@ cmd_hilfe() {
   ${B}noi update${R}       alles aktualisieren (System, Flatpak-Apps, Firmware)
   ${B}noi info${R}         Systeminformationen anzeigen
   ${B}noi aufraeumen${R}   Speicherplatz freigeben
+  ${B}noi sicherung${R}    Systemschnappschuss erstellen (vor großen Änderungen)
   ${B}noi hilfe${R}        diese Übersicht
 
   Hilfe & Fehler melden: https://github.com/Noi922/Noi-OS/issues
@@ -149,6 +170,7 @@ case "${1:-hilfe}" in
     update|aktualisieren) cmd_update ;;
     info|system)          cmd_info ;;
     aufraeumen|clean)     cmd_aufraeumen ;;
+    sicherung|backup|snapshot) cmd_sicherung ;;
     hilfe|help|-h|--help) cmd_hilfe ;;
     *) fehler "Unbekannter Befehl: $1"; cmd_hilfe; exit 1 ;;
 esac

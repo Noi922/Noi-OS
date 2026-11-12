@@ -62,6 +62,17 @@ flatpak
 kdeconnect
 skanpage
 7zip
+# Weitere Programme
+keepassxc
+filelight
+elisa
+kolourpaint
+gimp
+kamoso
+# Spiele (Solitär, Minesweeper, Sudoku)
+kpat
+kmines
+ksudoku
 # Firefox wird separat aus Mozillas APT-Repo installiert (siehe config.sh)
 libreoffice-plasma
 libreoffice-l10n-de
