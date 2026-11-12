@@ -320,6 +320,18 @@ def main():
         check("Sicherheitsupdates finden Ubuntu-Quellen", out == "Ubuntu", f"lsb_release -is = {out}")
         code, out, _ = qga.run("ls /home/*/Desktop/*.desktop 2>/dev/null | wc -l")
         check("Genau ein Installer-Symbol auf dem Desktop", out == "1", f"{out} Symbol(e)")
+        code, out, _ = qga.run("noi info >/dev/null 2>&1 && noi hilfe | grep -c 'noi '")
+        check("noi-Werkzeug funktioniert", code == 0 and out.isdigit() and int(out) >= 4,
+              f"{out} Befehle")
+        code, out, _ = qga.run("python3 -c \"import json; p=json.load(open('/etc/firefox/policies/policies.json'))"
+                               "['policies']; print('uBlock' if 'uBlock0@raymondhill.net' in p['ExtensionSettings'] else 'fehlt')\"")
+        check("Firefox: uBlock Origin vorgesehen", out == "uBlock", out)
+        code, out, _ = qga.run("grep -A1 '^\\[NightColor\\]' /etc/xdg/kwinrc | tail -1")
+        check("Nachtlicht voreingestellt", out == "Active=true", out, required=False)
+        code, out, _ = qga.run("ls /usr/share/wallpapers | grep -c '^NoiCamo'")
+        check("Camo-Hintergründe (4 Varianten)", out == "4", f"{out} gefunden", required=False)
+        code, out, _ = qga.run("command -v gamemoded >/dev/null && echo ja")
+        check("GameMode installiert", out == "ja", out or "fehlt", required=False)
         code, out, _ = qga.run("systemctl --failed --no-legend --plain | awk '{print $1}' | tr '\\n' ' '")
         check("Keine fehlgeschlagenen Dienste", out == "", out or "keine", required=False)
         screenshot("20-ende")

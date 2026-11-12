@@ -1,0 +1,157 @@
+#!/usr/bin/env bash
+# noi – das Werkzeug von Noi OS für die wichtigsten Alltagsaufgaben.
+#   noi update      alles aktualisieren (System, Flatpak-Apps, Firmware)
+#   noi info        Systeminformationen
+#   noi aufraeumen  Speicherplatz freigeben
+#   noi hilfe       diese Übersicht
+set -uo pipefail
+
+G=$'\e[38;2;122;154;58m'   # Camo-Grün
+L=$'\e[38;2;201;211;160m'  # Salbei
+D=$'\e[38;2;75;93;46m'     # Oliv
+B=$'\e[1m'; R=$'\e[0m'
+[[ -t 1 ]] || { G=; L=; D=; B=; R=; }
+
+titel()  { echo; echo "${G}${B}==>${R}${B} $*${R}"; }
+ok()     { echo "  ${G}✔${R} $*"; }
+hinweis(){ echo "  ${L}•${R} $*"; }
+fehler() { echo "  ${B}✘ $*${R}" >&2; }
+
+als_root() {
+    if [[ $EUID -eq 0 ]]; then "$@"; else sudo "$@"; fi
+}
+
+frei_bytes() { df --output=avail -B1 / | tail -1 | tr -dc 0-9; }
+menschlich() { numfmt --to=iec --suffix=B "${1:-0}" 2>/dev/null || echo "${1}B"; }
+
+cmd_update() {
+    titel "Systempakete aktualisieren (Ubuntu + Noi OS)"
+    if als_root apt-get update -qq && als_root env DEBIAN_FRONTEND=noninteractive \
+            apt-get full-upgrade -y; then
+        ok "Systempakete sind aktuell"
+    else
+        fehler "Systemupdate fehlgeschlagen – Internetverbindung prüfen"
+    fi
+
+    if command -v flatpak >/dev/null; then
+        titel "Flatpak-Apps aktualisieren"
+        if flatpak update -y --noninteractive; then ok "Flatpak-Apps sind aktuell"
+        else fehler "Flatpak-Update fehlgeschlagen"; fi
+    fi
+
+    if command -v fwupdmgr >/dev/null; then
+        titel "Firmware prüfen (BIOS, SSD, …)"
+        fwupdmgr refresh --force >/dev/null 2>&1 || true
+        if fwupdmgr get-updates >/dev/null 2>&1; then
+            hinweis "Es gibt Firmware-Updates. Installieren mit:  fwupdmgr update"
+        else
+            ok "Keine Firmware-Updates nötig"
+        fi
+    fi
+
+    if [[ -f /var/run/reboot-required ]]; then
+        echo; hinweis "${B}Bitte neu starten${R}, damit alle Updates aktiv werden."
+    fi
+    echo; ok "${B}Fertig!${R}"
+}
+
+cmd_aufraeumen() {
+    local vorher nachher
+    vorher=$(frei_bytes)
+    titel "Nicht mehr benötigte Pakete entfernen"
+    als_root apt-get autoremove --purge -y -qq && ok "erledigt"
+    titel "Paket-Zwischenspeicher leeren"
+    als_root apt-get clean && ok "erledigt"
+    if command -v flatpak >/dev/null; then
+        titel "Ungenutzte Flatpak-Laufzeiten entfernen"
+        flatpak uninstall --unused -y --noninteractive >/dev/null 2>&1; ok "erledigt"
+    fi
+    titel "Alte Systemprotokolle kürzen (älter als 4 Wochen)"
+    als_root journalctl --vacuum-time=4weeks >/dev/null 2>&1; ok "erledigt"
+    if [[ -d "$HOME/.cache/thumbnails" ]]; then
+        titel "Alte Vorschaubilder löschen (älter als 30 Tage)"
+        find "$HOME/.cache/thumbnails" -type f -atime +30 -delete 2>/dev/null; ok "erledigt"
+    fi
+    nachher=$(frei_bytes)
+    echo; ok "${B}Freigegeben: $(menschlich $(( nachher > vorher ? nachher - vorher : 0 )))${R}" \
+             "– jetzt frei: $(menschlich "$nachher")"
+}
+
+cmd_info() {
+    local os kern de cpu ram disk up pk fp gpu sitzung
+    # shellcheck disable=SC1091
+    os=$(. /etc/os-release; echo "$PRETTY_NAME")
+    kern=$(uname -r)
+    de="KDE Plasma $(dpkg-query -W -f='${Version}' plasma-workspace 2>/dev/null \
+        | sed -E 's/^[0-9]+://; s/-.*//')"
+    sitzung=${XDG_SESSION_TYPE:-}
+    cpu=$(awk -F: '/model name/{gsub(/^ +/,"",$2); print $2; exit}' /proc/cpuinfo)
+    gpu=$(lspci 2>/dev/null | awk -F': ' '/VGA|3D|Display/{print $2; exit}')
+    ram=$(free -h --si | awk '/^Mem/{print $3 " / " $2}')
+    disk=$(df -h / | awk 'NR==2{print $3 " / " $2 " (" $5 ")"}')
+    up=$(uptime -p | sed -e 's/^up //' -e 's/days\?/Tage/; s/hours\?/Std./; s/minutes\?/Min./')
+    pk=$(dpkg-query -f '.\n' -W 2>/dev/null | wc -l)
+    fp=$(flatpak list --app 2>/dev/null | wc -l)
+    local virt
+    virt=$(systemd-detect-virt 2>/dev/null || true); [[ $virt == none ]] && virt=""
+
+    # Logo: "N" im Camo-Rahmen (jede Zeile 15 Zeichen breit)
+    local logo=(
+"${D} ▄▄▄▄▄▄▄▄▄▄▄▄▄ ${R}"
+"${D}█${L} ██▄    ██ ${D}█${G}▄ ${R}"
+"${D}█${L} ██▀█▄  ██ ${D}█${G}█ ${R}"
+"${D}█${L} ██  ▀█▄██ ${D}█${G}█ ${R}"
+"${D}█${L} ██    ▀██ ${D}█${G}█ ${R}"
+"${D} ▀▀▀▀▀▀▀▀▀▀▀▀▀${G}▀${R}"
+    )
+    local zeilen=(
+"${G}${B}$(id -un)${R}@${G}${B}$(hostname)${R}"
+"${L}System${R}     $os"
+"${L}Kernel${R}     $kern"
+"${L}Desktop${R}    $de${sitzung:+ ($sitzung)}"
+"${L}Prozessor${R}  ${cpu:-?}"
+"${L}Grafik${R}     ${gpu:-?}"
+"${L}Speicher${R}   $ram"
+"${L}Festplatte${R} $disk"
+"${L}Laufzeit${R}   $up${virt:+   ${D}(VM: $virt)${R}}"
+"${L}Pakete${R}     $pk deb, $fp Flatpak"
+    )
+    local leer="               "
+    echo
+    for i in $(seq 0 $(( ${#zeilen[@]} - 1 ))); do
+        printf '  %s   %s\n' "${logo[$i]:-$leer}" "${zeilen[$i]}"
+    done
+    echo
+}
+
+cmd_hilfe() {
+    cat <<EOF
+
+  ${G}${B}noi${R} – das Werkzeug von Noi OS
+
+  ${B}noi update${R}       alles aktualisieren (System, Flatpak-Apps, Firmware)
+  ${B}noi info${R}         Systeminformationen anzeigen
+  ${B}noi aufraeumen${R}   Speicherplatz freigeben
+  ${B}noi hilfe${R}        diese Übersicht
+
+  Hilfe & Fehler melden: https://github.com/Noi922/Noi-OS/issues
+
+EOF
+}
+
+pause_wenn_gewuenscht() {
+    if [[ ${NOI_PAUSE:-0} == 1 ]]; then
+        echo; read -r -p "  Enter drücken zum Schließen … " _
+    fi
+}
+
+case "${1:-hilfe}" in
+    update|aktualisieren) cmd_update ;;
+    info|system)          cmd_info ;;
+    aufraeumen|clean)     cmd_aufraeumen ;;
+    hilfe|help|-h|--help) cmd_hilfe ;;
+    *) fehler "Unbekannter Befehl: $1"; cmd_hilfe; exit 1 ;;
+esac
+status=$?
+pause_wenn_gewuenscht
+exit $status

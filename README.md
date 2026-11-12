@@ -23,6 +23,8 @@ Sicherheitsupdates bis 2029.
 | Handy | **KDE Connect**: Dateien, Benachrichtigungen und Zwischenablage mit dem Handy teilen |
 | Sicherheit | automatische Sicherheitsupdates (auch Firefox), Firewall aktiv, Secure Boot, AppArmor |
 | System | zram (schneller Auslagerungsspeicher), Timeshift für Sicherungen, Willkommens-Assistent |
+| `noi`-Werkzeug | `noi update` (System + Flatpak + Firmware), `noi info`, `noi aufraeumen` – auch im Startmenü |
+| Komfort | Nachtlicht ab 20 Uhr, GameMode für Spiele, Firefox mit uBlock Origin und ohne Telemetrie |
 | Anzeige | passt sich automatisch an: Skalierung nach Pixeldichte (100–250 %, wie Windows), in VMs wächst die Auflösung mit dem Fenster |
 | VM-Unterstützung | Gastwerkzeuge für VirtualBox, VMware, KVM/Proxmox und Hyper-V |
 | Qualität | jeder Build wird automatisch in einer VM getestet (Start, Desktop, Internet, Firewall) |

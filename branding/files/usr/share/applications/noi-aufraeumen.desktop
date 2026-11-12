@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Speicher aufräumen
+GenericName=Noi OS Aufräumen
+Comment=Nicht mehr benötigte Pakete und alte Dateien entfernen
+Exec=env NOI_PAUSE=1 konsole --hide-menubar -e noi aufraeumen
+Icon=edit-clear-all
+Terminal=false
+Categories=System;
+Keywords=clean;aufräumen;speicher;platz;noi;

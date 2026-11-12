@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Noi OS Systeminfo
+Comment=Informationen über dein System anzeigen
+Exec=env NOI_PAUSE=1 konsole --hide-menubar -e noi info
+Icon=noios-logo
+Terminal=false
+Categories=System;
+Keywords=info;system;neofetch;noi;

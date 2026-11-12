@@ -83,6 +83,9 @@ kio-extras
 plasma-welcome
 timeshift
 
+# --- Spiele: mehr Leistung, solange ein Spiel läuft (Steam & Co. über Flathub) -
+gamemode
+
 # --- Sicherheit & System ---------------------------------------------------
 ufw
 plasma-firewall

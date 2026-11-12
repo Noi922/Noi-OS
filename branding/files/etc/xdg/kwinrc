@@ -1,0 +1,9 @@
+# Noi OS: Nachtlicht – ab 20 Uhr wärmere Bildschirmfarben (schont die Augen)
+# Ändern unter Systemeinstellungen → Anzeige und Monitor → Nachtfarben
+[NightColor]
+Active=true
+Mode=Times
+EveningBeginFixed=2000
+MorningBeginFixed=0630
+NightTemperature=4500
+TransitionTime=60

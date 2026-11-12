@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=System aktualisieren
+GenericName=Noi OS Update
+Comment=System, Flatpak-Apps und Firmware auf den neuesten Stand bringen
+Exec=env NOI_PAUSE=1 konsole --hide-menubar -e noi update
+Icon=system-software-update
+Terminal=false
+Categories=System;
+Keywords=update;aktualisieren;upgrade;noi;
