@@ -75,7 +75,7 @@ def blob_path(cx, cy, r, rng, points=None):
     return d + "Z"
 
 
-def make(width, height, seed, text, palette="wald"):
+def make(width, height, seed, text, palette="wald", bottom=None):
     BASE, LAYERS, TEXT_COLOR = PALETTES[palette]
     rng = random.Random(seed)
     scale = min(width, height)
@@ -121,7 +121,10 @@ def make(width, height, seed, text, palette="wald"):
 
     if text:
         fs = scale * 0.045
-        x, y = width - fs * 1.2, height - fs * 1.1
+        x = width - fs * 1.2
+        # bottom: Abstand vom unteren Rand als Anteil der Höhe (z. B. für die
+        # Windows-Taskleiste); Standard wie bisher knapp über dem Rand
+        y = height - (height * bottom if bottom is not None else fs * 1.1)
         out.append(
             '<text x="%.0f" y="%.0f" text-anchor="end" '
             'font-family="Noto Sans, DejaVu Sans, sans-serif" font-weight="700" '
@@ -139,11 +142,14 @@ def main():
     ap.add_argument("--height", type=int, default=2160)
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--no-text", action="store_true")
+    ap.add_argument("--windows", action="store_true",
+                    help="Schriftzug über der Windows-Taskleiste platzieren")
     ap.add_argument("--palette", choices=sorted(PALETTES), default="wald",
                     help="Farbvariante (Standard: wald)")
     a = ap.parse_args()
     with open(a.output, "w") as f:
-        f.write(make(a.width, a.height, a.seed, not a.no_text, a.palette))
+        f.write(make(a.width, a.height, a.seed, not a.no_text, a.palette,
+                     bottom=0.085 if a.windows else None))
 
 
 if __name__ == "__main__":
