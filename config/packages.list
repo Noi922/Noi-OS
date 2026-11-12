@@ -100,6 +100,10 @@ open-vm-tools-desktop
 virtualbox-guest-utils
 virtualbox-guest-x11
 linux-cloud-tools-generic
+# Damit sich auch die offiziellen VirtualBox-Gasterweiterungen
+# (Geräte → Gasterweiterungen einlegen) installieren lassen
+build-essential
+dkms
 
 # --- Installer -------------------------------------------------------------
 calamares

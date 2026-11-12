@@ -1,0 +1,12 @@
+# Noi OS: VirtualBox – Auflösung automatisch an die Fenstergröße anpassen (X11)
+#
+# Ubuntus Gastwerkzeuge (7.0) starten in der Sitzung nur "VBoxClient
+# --vmsvga-session", das den nicht mitgelieferten Dienst VBoxDRMClient braucht.
+# Der X11-Helfer "--vmsvga" muss in der Sitzung selbst laufen – das holen wir
+# hier nach. Nur in VirtualBox (PCI-Gerät 80ee:cafe), nicht über SSH.
+# Diese Datei wird von der X-Sitzung eingelesen ("source"), daher kein exit.
+if [ -z "${SSH_CONNECTION}" ] && [ -c /dev/vboxuser ] \
+   && command -v VBoxClient >/dev/null 2>&1 \
+   && lspci -d 80ee:cafe 2>/dev/null | grep -q .; then
+    VBoxClient --vmsvga >/dev/null 2>&1 || true
+fi

@@ -320,6 +320,14 @@ def main():
         check("Sicherheitsupdates finden Ubuntu-Quellen", out == "Ubuntu", f"lsb_release -is = {out}")
         code, out, _ = qga.run("ls /home/*/Desktop/*.desktop 2>/dev/null | wc -l")
         check("Genau ein Installer-Symbol auf dem Desktop", out == "1", f"{out} Symbol(e)")
+        # Installer-Fallen (führten zu "Installation gescheitert")
+        code, out, _ = qga.run("test -f /etc/apt/sources.list && echo da")
+        check("Installer: /etc/apt/sources.list vorhanden (automirror)", out == "da", out or "fehlt")
+        code, out, _ = qga.run("grep -c 'apt-cdrom\\|apt-get update' /etc/calamares/modules/before_bootloader_context.conf")
+        check("Installer: UEFI-Schritt ohne apt-cdrom/apt-get", out == "0", f"{out} Treffer")
+        code, out, _ = qga.run("test -f /etc/X11/Xsession.d/99noios-vbox-resize && command -v gcc dkms >/dev/null && echo ja")
+        check("VirtualBox: Größenanpassung + Gasterweiterungen-Unterstützung", out == "ja",
+              out or "fehlt", required=False)
         code, out, _ = qga.run("noi info >/dev/null 2>&1 && noi hilfe | grep -c 'noi '")
         check("noi-Werkzeug funktioniert", code == 0 and out.isdigit() and int(out) >= 4,
               f"{out} Befehle")

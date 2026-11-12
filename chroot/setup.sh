@@ -19,7 +19,10 @@ chmod +x /usr/sbin/policy-rc.d
 
 # --- Paketquellen ----------------------------------------------------------
 log "Paketquellen einrichten"
-rm -f /etc/apt/sources.list
+# Wie bei Ubuntu: Hinweisdatei statt Löschen. Der Installer (Calamares-Modul
+# automirror) entfernt sie selbst – fehlt sie, bricht die Installation ab.
+echo "# Ubuntu sources have moved to /etc/apt/sources.list.d/ubuntu.sources" \
+    > /etc/apt/sources.list
 cat > /etc/apt/sources.list.d/ubuntu.sources <<EOF
 Types: deb
 URIs: ${MIRROR}
@@ -195,6 +198,16 @@ for f in /usr/share/applications/calamares.desktop \
     [[ -f $f ]] && { grep -q '^NoDisplay=' "$f" && sed -i 's/^NoDisplay=.*/NoDisplay=true/' "$f" \
                      || sed -i '/^\[Desktop Entry\]/a NoDisplay=true' "$f"; }
 done
+# Vor der Bootloader-Einrichtung (UEFI) holt Kubuntus Konfiguration GRUB/shim
+# per apt-cdrom + apt-get von der ISO bzw. aus dem Internet. Unsere ISO hat kein
+# Paketarchiv und offline schlägt apt-get fehl – beides ist aber schon im
+# System installiert. Daher: nichts tun (wie im BIOS-Fall).
+cat > "$CAL/modules/before_bootloader_context.conf" <<'EOF'
+---
+# Noi OS: grub-efi-amd64-signed und shim-signed sind bereits installiert
+firmwareType:
+    "*": "-/bin/true"
+EOF
 # Lubuntu-Reste im Willkommensbildschirm ersetzen
 sed -i -e 's|^showDonateUrl:.*|showDonateUrl: false|' \
        -e 's|^\(\s*internetCheckUrl:\).*|\1 http://connectivity-check.ubuntu.com|' \

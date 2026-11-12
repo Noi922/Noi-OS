@@ -115,6 +115,10 @@ sudo VM_FORMATS=qcow2 ./make-vm.sh      # nur eines
 - Wirkt alles zu groß? **Anzeige → Virtueller Bildschirm 1 → Skaliere auf 100 %**
   (VirtualBox vergrößert sonst auf Laptops mit Windows-Skalierung alles mit)
 - Netzwerk: **NAT** (Standard) genügt – Noi OS verbindet sich automatisch
+- Gasterweiterungen sind **schon eingebaut** (Auflösung, Zwischenablage, Drag & Drop).
+  Wer die neueste Version von VirtualBox will: **Geräte → Gasterweiterungen einlegen**,
+  dann im Terminal `sudo sh /media/$USER/VBox*/VBoxLinuxAdditions.run` – Compiler und
+  Kernel-Header dafür sind vorinstalliert.
 
 ## ISO selbst bauen
 
