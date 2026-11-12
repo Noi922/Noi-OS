@@ -1,0 +1,354 @@
+#!/usr/bin/env bash
+# ===========================================================================
+#  Noi OS Server – Installer für die Textkonsole
+#
+#  Startet im Live-System automatisch auf der ersten Konsole. Fragt nach
+#  Festplatte, Rechnername und Benutzerkonto und installiert dann das System
+#  (BIOS und UEFI, auch mit Secure Boot).
+#
+#  Interaktiv:    noi-server-install
+#  Automatisch:   noi-server-install --disk /dev/sda --hostname web1 \
+#                     --user admin --password 'geheim' --yes
+#
+#  Optionen:
+#    --disk GERÄT        Zielfestplatte (wird KOMPLETT gelöscht)
+#    --hostname NAME     Rechnername
+#    --user NAME         Benutzer mit sudo-Rechten
+#    --password TEXT     Passwort des Benutzers (oder --password-hash HASH)
+#    --ssh-key "ssh-…"   öffentlicher SSH-Schlüssel für den Benutzer
+#    --source ORDNER     Quelle des Systems (Standard: /rofs im Live-System)
+#    --yes               nicht nachfragen
+#    --reboot            nach der Installation neu starten
+# ===========================================================================
+set -euo pipefail
+
+DISK="" HOST="" USERNAME="" PASSWORD="" PWHASH="" SSHKEY="" SOURCE="/rofs"
+YES=0 REBOOT=0
+TARGET="/target"
+TITLE="Noi OS Server – Installation"
+
+die()  { echo -e "\n\e[1;31mFehler:\e[0m $*" >&2; exit 1; }
+step() { echo -e "\n\e[1;32m==>\e[0m \e[1m$*\e[0m"; }
+
+while (($#)); do
+    case $1 in
+        --disk)          DISK=${2:?}; shift 2 ;;
+        --hostname)      HOST=${2:?}; shift 2 ;;
+        --user)          USERNAME=${2:?}; shift 2 ;;
+        --password)      PASSWORD=${2:?}; shift 2 ;;
+        --password-hash) PWHASH=${2:?}; shift 2 ;;
+        --ssh-key)       SSHKEY=${2:?}; shift 2 ;;
+        --source)        SOURCE=${2:?}; shift 2 ;;
+        --target)        TARGET=${2:?}; shift 2 ;;
+        --yes|-y)        YES=1; shift ;;
+        --reboot)        REBOOT=1; shift ;;
+        -h|--help)       sed -n '2,23p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        *) die "Unbekannte Option: $1 (Hilfe: --help)" ;;
+    esac
+done
+
+[[ $EUID -eq 0 ]] || die "Bitte als root starten:  sudo noi-server-install"
+[[ -d $SOURCE/etc && -d $SOURCE/usr ]] \
+    || die "Quelle $SOURCE enthält kein System (im Live-System ist das /rofs)."
+for t in sgdisk mkfs.ext4 mkfs.vfat rsync blkid lsblk wipefs; do
+    command -v "$t" >/dev/null || die "Werkzeug fehlt: $t"
+done
+
+HAVE_UI=0
+if [[ -t 0 && -t 1 ]] && command -v whiptail >/dev/null; then HAVE_UI=1; fi
+ui_needed() { ((HAVE_UI)) || die "$1 fehlt (Option $2) und es gibt keine Konsole zum Nachfragen."; }
+
+# --- Eingaben prüfen -----------------------------------------------------------
+valid_host() { [[ $1 =~ ^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$ ]]; }
+valid_user() {
+    [[ $1 =~ ^[a-z][a-z0-9_-]{0,30}$ ]] || return 1
+    # Namen, die es im System schon gibt (root, daemon, www-data …), sind tabu
+    ! grep -q "^$1:" "$SOURCE/etc/passwd"
+}
+
+# Festplatten, auf die installiert werden kann: keine Wechselmedien/CDs, nicht
+# das Medium, von dem das Live-System läuft, mindestens 8 GB.
+live_disk() {
+    local src
+    src=$(findmnt -no SOURCE /cdrom 2>/dev/null) || return 0
+    lsblk -no PKNAME "$src" 2>/dev/null | head -1
+}
+list_disks() {
+    local skip name size type
+    skip=$(live_disk)
+    while read -r name size type; do
+        [[ $type == disk && $name != "$skip" ]] || continue
+        (( size >= 8 * 1000 * 1000 * 1000 )) || continue
+        echo "$name"
+    done < <(lsblk -dbno NAME,SIZE,TYPE 2>/dev/null)
+}
+disk_label() {
+    local size model
+    size=$(lsblk -dno SIZE "/dev/$1" 2>/dev/null | tr -d ' ')
+    model=$(lsblk -dno MODEL "/dev/$1" 2>/dev/null | sed 's/ *$//')
+    echo "${size} ${model:-Festplatte}"
+}
+
+# --- Fragen ----------------------------------------------------------------------
+if [[ -z $DISK ]]; then
+    ui_needed "Die Zielfestplatte" "--disk"
+    mapfile -t disks < <(list_disks)
+    ((${#disks[@]})) || die "Keine geeignete Festplatte gefunden (mindestens 8 GB)."
+    menu=()
+    for d in "${disks[@]}"; do menu+=("/dev/$d" "$(disk_label "$d")"); done
+    DISK=$(whiptail --title "$TITLE" --menu \
+        "Auf welche Festplatte soll Noi OS Server installiert werden?\n\nACHTUNG: Die gewählte Festplatte wird komplett gelöscht." \
+        18 72 6 "${menu[@]}" 3>&1 1>&2 2>&3) || die "Abgebrochen."
+fi
+[[ -b $DISK ]] || die "$DISK ist kein Laufwerk."
+
+while [[ -z $HOST ]] || ! valid_host "$HOST"; do
+    [[ -z $HOST ]] || echo "Ungültiger Rechnername: $HOST" >&2
+    ui_needed "Der Rechnername" "--hostname"
+    HOST=$(whiptail --title "$TITLE" --inputbox \
+        "Rechnername (Kleinbuchstaben, Ziffern, Bindestrich):" 10 60 "noi-server" \
+        3>&1 1>&2 2>&3) || die "Abgebrochen."
+done
+
+while [[ -z $USERNAME ]] || ! valid_user "$USERNAME"; do
+    [[ -z $USERNAME ]] || echo "Ungültiger oder schon vergebener Benutzername: $USERNAME" >&2
+    ui_needed "Der Benutzername" "--user"
+    USERNAME=$(whiptail --title "$TITLE" --inputbox \
+        "Benutzername für die Anmeldung (bekommt sudo-Rechte):\n\nKleinbuchstaben und Ziffern, z. B. admin" \
+        12 60 "admin" 3>&1 1>&2 2>&3) || die "Abgebrochen."
+done
+
+while [[ -z $PASSWORD && -z $PWHASH ]]; do
+    ui_needed "Das Passwort" "--password"
+    p1=$(whiptail --title "$TITLE" --passwordbox \
+        "Passwort für $USERNAME (mindestens 8 Zeichen):" 10 60 3>&1 1>&2 2>&3) || die "Abgebrochen."
+    p2=$(whiptail --title "$TITLE" --passwordbox \
+        "Passwort wiederholen:" 10 60 3>&1 1>&2 2>&3) || die "Abgebrochen."
+    if [[ $p1 != "$p2" ]]; then
+        whiptail --title "$TITLE" --msgbox "Die Passwörter stimmen nicht überein." 8 50
+    elif (( ${#p1} < 8 )); then
+        whiptail --title "$TITLE" --msgbox "Das Passwort ist zu kurz (mindestens 8 Zeichen)." 8 56
+    else
+        PASSWORD=$p1
+    fi
+done
+[[ $PASSWORD != *$'\n'* ]] || die "Das Passwort darf keinen Zeilenumbruch enthalten."
+
+if ((HAVE_UI)) && [[ -z $SSHKEY ]] && ((!YES)); then
+    SSHKEY=$(whiptail --title "$TITLE" --inputbox \
+        "Öffentlicher SSH-Schlüssel für $USERNAME (optional – leer lassen zum Überspringen):\n\nBeginnt mit ssh-ed25519 … oder ssh-rsa …" \
+        12 74 "" 3>&1 1>&2 2>&3) || SSHKEY=""
+fi
+if [[ -n $SSHKEY && ! $SSHKEY =~ ^(ssh-|ecdsa-|sk-) ]]; then
+    die "Das sieht nicht nach einem öffentlichen SSH-Schlüssel aus."
+fi
+
+if ((!YES)); then
+    ui_needed "Die Bestätigung" "--yes"
+    whiptail --title "$TITLE" --defaultno --yesno \
+"Bereit zur Installation:
+
+  Festplatte:   $DISK  ($(disk_label "$(basename "$DISK")"))
+  Rechnername:  $HOST
+  Benutzer:     $USERNAME
+
+ALLE DATEN auf $DISK werden gelöscht.
+
+Jetzt installieren?" 16 70 || die "Abgebrochen – es wurde nichts verändert."
+fi
+
+# --- Hilfen ----------------------------------------------------------------------
+part() {   # Partitionsname: /dev/sda3, aber /dev/nvme0n1p3 und /dev/loop0p3
+    if [[ $DISK =~ [0-9]$ ]]; then echo "${DISK}p$1"; else echo "${DISK}$1"; fi
+}
+UUID_LINK=""
+cleanup() {
+    set +e
+    local d
+    for d in run sys/firmware/efi/efivars sys proc dev/pts dev boot/efi ""; do
+        mountpoint -q "$TARGET/$d" 2>/dev/null && umount -l "$TARGET/$d"
+    done
+    [[ -n $UUID_LINK ]] && rm -f "$UUID_LINK"
+}
+trap cleanup EXIT
+
+# Partitions-Gerätedateien sicherstellen (fehlen in Umgebungen ohne udev)
+part_nodes() {
+    local name n dev sys mm
+    name=$(basename "$DISK")
+    partx -u "$DISK" 2>/dev/null || partprobe "$DISK" 2>/dev/null || true
+    command -v udevadm >/dev/null && udevadm settle 2>/dev/null || true
+    for n in 1 2 3; do
+        dev=$(part "$n"); sys="/sys/block/$name/$(basename "$dev")/dev"
+        for _ in $(seq 1 20); do [[ -b $dev || -f $sys ]] && break; sleep 0.5; done
+        if [[ ! -b $dev ]]; then
+            [[ -f $sys ]] || die "Partition $dev wurde nicht erkannt"
+            mm=$(cat "$sys")
+            mknod "$dev" b "${mm%:*}" "${mm#*:}"
+        fi
+    done
+}
+
+# --- 1. Festplatte ---------------------------------------------------------------
+step "1/5 Festplatte $DISK partitionieren"
+swapoff -a 2>/dev/null || true
+for m in $(lsblk -nro MOUNTPOINT "$DISK" 2>/dev/null | grep -v '^$' || true); do
+    umount -l "$m" 2>/dev/null || true
+done
+wipefs -a "$DISK" >/dev/null 2>&1 || true
+#   1: BIOS-Boot (GRUB für BIOS)   2: EFI-Partition   3: System (ext4)
+sgdisk -Z "$DISK" >/dev/null 2>&1 || true
+sgdisk -n1:1M:+1M -t1:ef02 -c1:bios \
+       -n2:0:+512M -t2:ef00 -c2:EFI \
+       -n3:0:0 -t3:8300 -c3:noios-server "$DISK" >/dev/null
+part_nodes
+wipefs -a "$(part 2)" "$(part 3)" >/dev/null 2>&1 || true
+mkfs.vfat -F32 -n EFI "$(part 2)" >/dev/null
+mkfs.ext4 -q -F -L noios-root "$(part 3)"
+
+# --- 2. System kopieren ----------------------------------------------------------
+step "2/5 System kopieren (das dauert ein paar Minuten)"
+mkdir -p "$TARGET"
+mount "$(part 3)" "$TARGET"
+rsync -aHAX --numeric-ids --info=progress2 --no-inc-recursive \
+    --exclude='/proc/*' --exclude='/sys/*' --exclude='/dev/*' --exclude='/run/*' \
+    --exclude='/tmp/*' --exclude='/cdrom/*' --exclude='/rofs/*' --exclude='/target/*' \
+    "$SOURCE"/ "$TARGET"/
+mkdir -p "$TARGET"/{proc,sys,dev,run,tmp,boot/efi}
+chmod 1777 "$TARGET/tmp"
+
+ROOT_UUID=$(blkid -s UUID -o value "$(part 3)")
+EFI_UUID=$(blkid -s UUID -o value "$(part 2)")
+[[ -n $ROOT_UUID && -n $EFI_UUID ]] || die "Dateisystem-Kennungen konnten nicht gelesen werden."
+
+# --- 3. Grundeinstellungen ---------------------------------------------------------
+step "3/5 System einrichten (Rechnername, Benutzer $USERNAME)"
+cat > "$TARGET/etc/fstab" <<EOF
+# <Dateisystem>                            <Mountpunkt> <Typ> <Optionen>          <dump> <pass>
+UUID=${ROOT_UUID}  /           ext4  errors=remount-ro  0  1
+UUID=${EFI_UUID}                             /boot/efi   vfat  umask=0077         0  1
+EOF
+echo "$HOST" > "$TARGET/etc/hostname"
+printf '127.0.0.1\tlocalhost\n127.0.1.1\t%s\n::1\tlocalhost ip6-localhost ip6-loopback\n' \
+    "$HOST" > "$TARGET/etc/hosts"
+: > "$TARGET/etc/machine-id"          # wird beim ersten Start neu erzeugt
+rm -f "$TARGET/var/lib/dbus/machine-id" "$TARGET"/etc/ssh/ssh_host_*
+# Nur für das Live-System gedacht
+rm -f "$TARGET/etc/profile.d/noios-live-installer.sh" \
+      "$TARGET/usr/share/initramfs-tools/scripts/casper-bottom/35noios_server_live"
+rm -rf "$TARGET/etc/systemd/system/getty@tty1.service.d"
+
+mount "$(part 2)" "$TARGET/boot/efi" 2>/dev/null || ESP_VIA_MTOOLS=1
+for d in dev dev/pts proc sys; do mount --bind "/$d" "$TARGET/$d"; done
+mount -t tmpfs tmpfs "$TARGET/run"
+if [[ -d /sys/firmware/efi/efivars ]]; then
+    mount -t efivarfs efivarfs "$TARGET/sys/firmware/efi/efivars" 2>/dev/null || true
+fi
+# GRUB schreibt root=UUID=… nur, wenn /dev/disk/by-uuid/<UUID> existiert
+if [[ ! -e /dev/disk/by-uuid/$ROOT_UUID ]]; then
+    mkdir -p /dev/disk/by-uuid
+    ln -s "$(part 3)" "/dev/disk/by-uuid/$ROOT_UUID"
+    UUID_LINK="/dev/disk/by-uuid/$ROOT_UUID"
+fi
+
+[[ -n $PWHASH ]] || PWHASH=$(printf '%s' "$PASSWORD" | chroot "$TARGET" openssl passwd -6 -stdin)
+chroot "$TARGET" useradd -m -s /bin/bash -c "$USERNAME" -G sudo,adm "$USERNAME"
+chroot "$TARGET" usermod -p "$PWHASH" "$USERNAME"
+chroot "$TARGET" passwd -l root >/dev/null
+if [[ -n $SSHKEY ]]; then
+    install -d -m 700 "$TARGET/home/$USERNAME/.ssh"
+    printf '%s\n' "$SSHKEY" > "$TARGET/home/$USERNAME/.ssh/authorized_keys"
+    chmod 600 "$TARGET/home/$USERNAME/.ssh/authorized_keys"
+    chroot "$TARGET" chown -R "$USERNAME:$USERNAME" "/home/$USERNAME/.ssh"
+fi
+
+# --- 4. Live-Werkzeuge entfernen, Bootloader ---------------------------------------
+step "4/5 Bootloader einrichten (BIOS + UEFI)"
+printf '#!/bin/sh\nexit 101\n' > "$TARGET/usr/sbin/policy-rc.d"
+chmod +x "$TARGET/usr/sbin/policy-rc.d"
+chroot "$TARGET" env DEBIAN_FRONTEND=noninteractive LC_ALL=C \
+    apt-get purge -y -q casper >/dev/null 2>&1 \
+    || echo "Hinweis: casper (Live-Werkzeug) blieb installiert – stört nicht."
+rm -f "$TARGET/usr/sbin/noi-server-install" "$TARGET/usr/sbin/policy-rc.d"
+
+chroot "$TARGET" grub-install --target=i386-pc --recheck "$DISK" >/dev/null 2>&1 \
+    || die "GRUB (BIOS) konnte nicht auf $DISK installiert werden."
+chroot "$TARGET" env LC_ALL=C update-initramfs -u -k all >/dev/null 2>&1 \
+    || die "initramfs konnte nicht erzeugt werden."
+chroot "$TARGET" env LC_ALL=C update-grub >/dev/null 2>&1 \
+    || die "Das Bootmenü konnte nicht erzeugt werden."
+if grep -q "root=/dev/" "$TARGET/boot/grub/grub.cfg" \
+        && ! grep -q "root=UUID=" "$TARGET/boot/grub/grub.cfg"; then
+    die "grub.cfg enthält einen Gerätenamen statt der UUID."
+fi
+
+# UEFI: signiertes shim + GRUB von Ubuntu in den Standard-Pfad EFI/BOOT und
+# nach EFI/ubuntu legen. Startet in jeder Firmware ohne NVRAM-Eintrag und
+# auch mit aktivem Secure Boot.
+EFICFG=$(mktemp)
+cat > "$EFICFG" <<EOF
+search.fs_uuid ${ROOT_UUID} root
+set prefix=(\$root)'/boot/grub'
+configfile \$prefix/grub.cfg
+EOF
+SHIM="$TARGET$(chroot "$TARGET" readlink -f /usr/lib/shim/shimx64.efi.signed)"
+GRUBEFI="$TARGET/usr/lib/grub/x86_64-efi-signed/grubx64.efi.signed"
+MM="$TARGET/usr/lib/shim/mmx64.efi"
+[[ -f $SHIM && -f $GRUBEFI && -f $MM ]] || die "Signierte UEFI-Bootdateien fehlen im System."
+if [[ ${ESP_VIA_MTOOLS:-0} == 1 ]]; then
+    # kein vfat-Kernelmodul (z. B. beim Bauen im Container): per mtools schreiben
+    export MTOOLS_SKIP_CHECK=1
+    ESP=$(part 2)
+    mmd -i "$ESP" ::/EFI ::/EFI/BOOT ::/EFI/ubuntu
+    mcopy -i "$ESP" "$SHIM"    ::/EFI/BOOT/BOOTX64.EFI
+    mcopy -i "$ESP" "$GRUBEFI" ::/EFI/BOOT/grubx64.efi
+    mcopy -i "$ESP" "$MM"      ::/EFI/BOOT/mmx64.efi
+    mcopy -i "$ESP" "$SHIM"    ::/EFI/ubuntu/shimx64.efi
+    mcopy -i "$ESP" "$GRUBEFI" ::/EFI/ubuntu/grubx64.efi
+    mcopy -i "$ESP" "$MM"      ::/EFI/ubuntu/mmx64.efi
+    mcopy -i "$ESP" "$EFICFG"  ::/EFI/BOOT/grub.cfg
+    mcopy -i "$ESP" "$EFICFG"  ::/EFI/ubuntu/grub.cfg
+else
+    E="$TARGET/boot/efi/EFI"
+    mkdir -p "$E/BOOT" "$E/ubuntu"
+    cp "$SHIM"    "$E/BOOT/BOOTX64.EFI"
+    cp "$GRUBEFI" "$E/BOOT/grubx64.efi"
+    cp "$MM"      "$E/BOOT/mmx64.efi"
+    cp "$SHIM"    "$E/ubuntu/shimx64.efi"
+    cp "$GRUBEFI" "$E/ubuntu/grubx64.efi"
+    cp "$MM"      "$E/ubuntu/mmx64.efi"
+    cp "$EFICFG"  "$E/BOOT/grub.cfg"
+    cp "$EFICFG"  "$E/ubuntu/grub.cfg"
+fi
+rm -f "$EFICFG"
+# Eintrag im Firmware-Bootmenü (nur wenn per UEFI gestartet; Fehler egal –
+# der Standard-Pfad EFI/BOOT funktioniert auch ohne)
+if [[ -d /sys/firmware/efi ]] && command -v efibootmgr >/dev/null; then
+    efibootmgr -q -c -d "$DISK" -p 2 -L "Noi OS Server" -l '\EFI\ubuntu\shimx64.efi' \
+        2>/dev/null || true
+fi
+
+# --- 5. Fertig ---------------------------------------------------------------------
+step "5/5 Abschließen"
+sync
+cleanup
+trap - EXIT
+
+cat <<EOF
+
+  ✔ Noi OS Server wurde auf $DISK installiert.
+
+    Anmelden:        $USERNAME  (an der Konsole oder per  ssh $USERNAME@<IP-Adresse>)
+    Web-Verwaltung:  https://<IP-Adresse>:9090  (Cockpit)
+    Werkzeug:        noi hilfe
+
+  Installationsmedium entfernen und neu starten.
+
+EOF
+if ((REBOOT)); then
+    reboot
+elif ((HAVE_UI)) && ((!YES)); then
+    if whiptail --title "$TITLE" --yesno "Installation abgeschlossen.\n\nJetzt neu starten?" 10 50; then
+        reboot
+    fi
+fi

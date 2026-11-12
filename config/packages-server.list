@@ -1,0 +1,88 @@
+# Pakete von Noi OS Server (ohne Desktop). Eine Zeile = ein Paket,
+# '#' leitet einen Kommentar ein. Installiert wird OHNE empfohlene Pakete,
+# damit das System schlank bleibt – was gebraucht wird, steht hier.
+
+# --- Basis -----------------------------------------------------------------
+ubuntu-minimal
+ubuntu-standard
+linux-generic
+casper
+locales
+language-pack-de
+sudo
+curl
+wget
+ca-certificates
+gnupg
+openssl
+bash-completion
+man-db
+netplan.io
+systemd-resolved
+systemd-timesyncd
+dbus-user-session
+
+# --- Bootloader & Installer-Werkzeuge ----------------------------------------
+grub-efi-amd64-signed
+grub-efi-amd64-bin
+grub-pc-bin
+grub2-common
+shim-signed
+efibootmgr
+mtools
+dosfstools
+e2fsprogs
+gdisk
+parted
+rsync
+whiptail
+
+# --- Fernzugriff & Sicherheit ------------------------------------------------
+openssh-server
+ufw
+fail2ban
+python3-systemd
+unattended-upgrades
+apparmor
+
+# --- Web-Verwaltung (https://<IP>:9090) --------------------------------------
+cockpit-ws
+cockpit-bridge
+cockpit-system
+cockpit-storaged
+cockpit-packagekit
+cockpit-podman
+
+# --- Container (Docker-kompatibel, ohne Dienst im Hintergrund) ---------------
+podman
+uidmap
+slirp4netns
+passt
+catatonit
+
+# --- Werkzeuge für den Alltag ------------------------------------------------
+htop
+tmux
+vim
+nano
+git
+jq
+tree
+ncdu
+lsof
+unzip
+zip
+bind9-dnsutils
+iputils-ping
+pciutils
+usbutils
+smartmontools
+lm-sensors
+
+# --- System ------------------------------------------------------------------
+systemd-zram-generator
+cloud-guest-utils
+
+# --- VM-Gastwerkzeuge (aktivieren sich nur in der jeweiligen VM-Software) ----
+qemu-guest-agent
+open-vm-tools

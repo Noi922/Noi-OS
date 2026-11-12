@@ -31,6 +31,33 @@ Sicherheitsupdates bis 2029.
 | Qualität | jeder Build wird automatisch in einer VM getestet (Start, Desktop, Internet, Firewall) |
 | Sprache | Deutsch, Tastatur `de`, Zeitzone Europe/Berlin (in `config.sh` änderbar) |
 
+## Noi OS Server (ohne Desktop)
+
+Dieselbe Basis, aber schlank für Heimserver, VMs und Mini-PCs:
+
+| Bereich | Noi OS Server |
+|---|---|
+| Installer | Text-Installer auf der Konsole (Festplatte, Rechnername, Benutzer) – auch unbeaufsichtigt per Befehl |
+| Fernzugriff | SSH (root-Anmeldung gesperrt), fail2ban sperrt Angreifer nach Fehlversuchen aus |
+| Web-Verwaltung | **Cockpit** unter `https://IP-Adresse:9090`: Auslastung, Dienste, Updates, Speicher, Container |
+| Sicherheit | Firewall (nur SSH und Cockpit offen), automatische Sicherheitsupdates, Secure Boot |
+| Container | Podman (Docker-kompatibel) |
+| Werkzeug | `noi update`, `noi doktor`, `noi netz`, `noi info`, `noi aufraeumen` |
+| Netzwerk | DHCP auf allen Kabel-Netzwerkkarten (`/etc/netplan/01-noios-dhcp.yaml` für feste IP) |
+
+**Herunterladen:** *Actions* → **„Noi OS Server bauen“** → *Run workflow*; die ISO
+erscheint danach unter *Releases* (als Vorab-Version markiert).
+
+**Selbst bauen und testen:**
+
+```bash
+sudo NOI_EDITION=server ./build.sh                       # → out/noios-server-1.0-amd64.iso
+sudo tools/server-test.sh out/noios-server-1.0-amd64.iso  # Installation + Start in QEMU prüfen
+```
+
+Was installiert wird, steht in `config/packages-server.list`; eingerichtet wird das
+System von `chroot/setup-server.sh`, der Installer ist `server/noi-server-install`.
+
 ## Projektstruktur
 
 ```
@@ -42,6 +69,9 @@ noi-os/
 ├── test-vm.sh                ← startet die ISO in QEMU
 ├── chroot/setup.sh           ← richtet das System im chroot ein
 ├── chroot/calamares/         ← robuster Ersatz für den Installer-Schritt "automirror"
+├── chroot/setup-server.sh    ← richtet die Server-Edition ein
+├── config/packages-server.list  ← Pakete der Server-Edition
+├── server/                   ← Text-Installer, Begrüßung, SSH-Schlüssel-Dienst (Server)
 ├── iso/grub.cfg              ← Bootmenü der Live-ISO
 ├── tools/make-camo-wallpaper.py  ← erzeugt das Camouflage-Hintergrundbild
 └── branding/                 ← Paket "noios-branding"

@@ -1,0 +1,13 @@
+[Unit]
+Description=Noi OS Server: SSH-Host-Schlüssel beim ersten Start erzeugen
+Documentation=https://github.com/Noi922/Noi-OS
+Before=ssh.service ssh.socket
+ConditionPathExists=!/etc/ssh/ssh_host_ed25519_key
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/ssh-keygen -A
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
