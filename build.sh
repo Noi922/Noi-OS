@@ -112,12 +112,15 @@ stage_chroot() {
 
     chroot "$CHROOT" /bin/bash /tmp/noi-build/setup.sh
 
-    rm -f "$CHROOT/etc/resolv.conf"
-    if [[ -e "$CHROOT/etc/resolv.conf.noi" || -L "$CHROOT/etc/resolv.conf.noi" ]]; then
-        mv "$CHROOT/etc/resolv.conf.noi" "$CHROOT/etc/resolv.conf"
-    else
-        ln -s ../run/systemd/resolve/stub-resolv.conf "$CHROOT/etc/resolv.conf"
-    fi
+    # DNS im fertigen System: wie bei Ubuntu ein Verweis auf systemd-resolved.
+    # debootstrap kopiert die resolv.conf des BUILD-Rechners ins Abbild; die
+    # zurückzulegen hieße, dessen DNS-Server (Router, Docker, Firmennetz …)
+    # fest einzubauen – dann gäbe es im installierten System "kein Internet",
+    # obwohl die Verbindung steht.
+    rm -f "$CHROOT/etc/resolv.conf" "$CHROOT/etc/resolv.conf.noi"
+    ln -s ../run/systemd/resolve/stub-resolv.conf "$CHROOT/etc/resolv.conf"
+    [[ -x "$CHROOT/usr/lib/systemd/systemd-resolved" ]] \
+        || die "systemd-resolved fehlt im Abbild – DNS würde nicht funktionieren"
     rm -rf "$CHROOT/tmp/noi-build"
     umount_chroot
 }

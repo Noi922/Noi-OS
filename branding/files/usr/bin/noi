@@ -5,6 +5,7 @@
 #   noi aufraeumen  Speicherplatz freigeben
 #   noi sicherung   Systemschnappschuss erstellen (Timeshift)
 #   noi doktor      System prüfen (Speicher, Dienste, Updates, Netz, Akku)
+#   noi netz        Internet-Diagnose Schritt für Schritt
 #   noi thema       Farbschema wechseln: hell | dunkel
 #   noi hintergrund Camo-Hintergrundbild wechseln: wald | wueste | nacht | winter
 #   noi zentrale    grafische Noi-Zentrale öffnen
@@ -252,6 +253,86 @@ cmd_doktor() {
     fi
 }
 
+# --- noi netz: Internet-Diagnose Schritt für Schritt ---------------------------
+cmd_netz() {
+    local probleme=0 gw dns
+    titel "Netzwerk-Diagnose"
+
+    # 1. Netzwerkkarte vorhanden?
+    local karten
+    karten=$(ls /sys/class/net 2>/dev/null | grep -v '^lo$' | tr '\n' ' ')
+    if [[ -z ${karten// /} ]]; then
+        fehler "1. Keine Netzwerkkarte gefunden"
+        hinweis "In einer VM: Netzwerkadapter in den VM-Einstellungen aktivieren"
+        hinweis "(VirtualBox: Ändern → Netzwerk → Adapter 1 → „Netzwerkadapter aktivieren“, NAT)"
+        return 1
+    fi
+    ok "1. Netzwerkkarte(n): $karten"
+
+    # 2. Verbindung aufgebaut (Kabel/WLAN, IP-Adresse)?
+    if command -v nmcli >/dev/null; then
+        nmcli -t -f DEVICE,TYPE,STATE device 2>/dev/null | grep -v ':loopback:' \
+            | awk -F: '{printf "      %-12s %-10s %s\n", $1, $2, $3}'
+        if nmcli -t -f STATE device 2>/dev/null | grep -qx 'unmanaged\|nicht verwaltet'; then
+            hinweis "Eine Karte ist „nicht verwaltet“ – NetworkManager kümmert sich nicht darum"
+        fi
+    fi
+    local ip4
+    ip4=$(ip -4 -o addr show scope global 2>/dev/null | awk '{print $2 " " $4}' | tr '\n' ' ')
+    if [[ -n $ip4 ]]; then
+        ok "2. IP-Adresse: $ip4"
+    else
+        fehler "2. Keine IP-Adresse erhalten (DHCP)"; probleme=1
+        hinweis "Kabel eingesteckt / WLAN verbunden? In einer VM: „Kabel verbunden“ anhaken"
+        hinweis "Neu versuchen:  sudo systemctl restart NetworkManager"
+    fi
+
+    # 3. Router erreichbar?
+    gw=$(ip -4 route show default 2>/dev/null | awk '{print $3; exit}')
+    if [[ -n $gw ]]; then
+        ok "3. Standard-Route über $gw"
+    else
+        fehler "3. Keine Standard-Route (kein Router bekannt)"; probleme=1
+    fi
+
+    # 4. Internet ohne Namensauflösung (direkt per IP-Adresse)
+    if curl -sS -o /dev/null -m 8 http://1.1.1.1 2>/dev/null \
+            || ping -c1 -W4 1.1.1.1 >/dev/null 2>&1 \
+            || ping -c1 -W4 8.8.8.8 >/dev/null 2>&1; then
+        ok "4. Internet per IP-Adresse erreichbar"
+    else
+        fehler "4. Internet per IP-Adresse NICHT erreichbar"; probleme=1
+        hinweis "Die Verbindung nach draußen fehlt – liegt am Router, an der VM-Netzwerkart"
+        hinweis "oder am Host-PC (VPN/Firewall), nicht an Noi OS' Namensauflösung"
+    fi
+
+    # 5. Namensauflösung (DNS)
+    dns=$(resolvectl dns 2>/dev/null | awk -F': ' 'NF>1 && $2!=""{print $2}' | tr '\n' ' ')
+    if getent ahosts archive.ubuntu.com >/dev/null 2>&1; then
+        ok "5. Namensauflösung (DNS) funktioniert${dns:+ – Server: $dns}"
+    else
+        fehler "5. Namensauflösung (DNS) funktioniert NICHT${dns:+ – Server: $dns}"; probleme=1
+        hinweis "/etc/resolv.conf: $(readlink -f /etc/resolv.conf 2>/dev/null)"
+        hinweis "Neu versuchen:  sudo systemctl restart systemd-resolved NetworkManager"
+    fi
+
+    # 6. Webseiten
+    if curl -fsS -o /dev/null -m 10 http://archive.ubuntu.com/ubuntu/dists/ 2>/dev/null; then
+        ok "6. Webseiten erreichbar (archive.ubuntu.com)"
+    else
+        fehler "6. Webseiten NICHT erreichbar (archive.ubuntu.com)"; probleme=1
+    fi
+
+    echo
+    if (( probleme == 0 )); then
+        ok "${B}Internet funktioniert.${R}"
+    else
+        hinweis "${B}Der erste Punkt mit ✘ ist die Ursache.${R} Bitte einen Screenshot davon an:"
+        hinweis "https://github.com/Noi922/Noi-OS/issues"
+        return 1
+    fi
+}
+
 # --- noi thema / noi hintergrund ----------------------------------------------
 cmd_thema() {
     local schema
@@ -310,6 +391,7 @@ cmd_hilfe() {
   ${B}noi aufraeumen${R}   Speicherplatz freigeben
   ${B}noi sicherung${R}    Systemschnappschuss erstellen (vor großen Änderungen)
   ${B}noi doktor${R}       System prüfen (Speicher, Dienste, Updates, Netz, Akku)
+  ${B}noi netz${R}         Internet-Diagnose: zeigt, an welcher Stelle es hakt
   ${B}noi thema${R}        Farbschema wechseln: hell | dunkel
   ${B}noi hintergrund${R}  Hintergrundbild: wald | wueste | nacht | winter
   ${B}noi zentrale${R}     grafische Noi-Zentrale öffnen
@@ -332,6 +414,7 @@ case "${1:-hilfe}" in
     aufraeumen|clean)     cmd_aufraeumen ;;
     sicherung|backup|snapshot) cmd_sicherung ;;
     doktor|doctor|check)  cmd_doktor ;;
+    netz|netzwerk|internet) cmd_netz ;;
     thema|theme)          cmd_thema "${2:-}" ;;
     hintergrund|wallpaper) cmd_hintergrund "${2:-}" ;;
     zentrale|gui)         cmd_zentrale ;;
