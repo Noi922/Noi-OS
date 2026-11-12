@@ -1,0 +1,10 @@
+# Tab-Vervollständigung für das noi-Werkzeug von Noi OS
+_noi() {
+    local cur=${COMP_WORDS[COMP_CWORD]} prev=${COMP_WORDS[COMP_CWORD-1]}
+    case $prev in
+        thema)       mapfile -t COMPREPLY < <(compgen -W "hell dunkel" -- "$cur") ;;
+        hintergrund) mapfile -t COMPREPLY < <(compgen -W "wald wueste nacht winter" -- "$cur") ;;
+        noi)         mapfile -t COMPREPLY < <(compgen -W "update info aufraeumen sicherung doktor thema hintergrund zentrale hilfe" -- "$cur") ;;
+    esac
+}
+complete -F _noi noi

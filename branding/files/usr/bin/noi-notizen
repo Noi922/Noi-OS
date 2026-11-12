@@ -1,0 +1,261 @@
+#!/usr/bin/env python3
+"""Noi-Notizen – schnelle Notizen, die sich von selbst speichern.
+
+Jede Notiz ist eine einfache Textdatei in ~/Dokumente/Noi-Notizen (bzw.
+$NOI_NOTIZEN_DIR). Die erste Zeile ist der Titel. Kein Speichern-Knopf nötig.
+"""
+import os
+import re
+import subprocess
+import sys
+import time
+
+try:
+    from PyQt5.QtCore import Qt, QTimer
+    from PyQt5.QtGui import QFont, QIcon, QKeySequence
+    from PyQt5.QtWidgets import (QApplication, QHBoxLayout, QLabel, QLineEdit,
+                                 QListWidget, QListWidgetItem, QMessageBox,
+                                 QPlainTextEdit, QPushButton, QShortcut, QSplitter,
+                                 QVBoxLayout, QWidget)
+except ImportError:
+    sys.stderr.write("Noi-Notizen braucht PyQt5:  sudo apt install python3-pyqt5\n")
+    sys.exit(1)
+
+
+def notes_dir():
+    d = os.environ.get("NOI_NOTIZEN_DIR")
+    if not d:
+        docs = ""
+        try:
+            docs = subprocess.run(["xdg-user-dir", "DOCUMENTS"], capture_output=True,
+                                  text=True, timeout=5).stdout.strip()
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+        home = os.path.expanduser("~")
+        if not docs or os.path.realpath(docs) == os.path.realpath(home):
+            docs = os.path.join(home, "Dokumente")
+        d = os.path.join(docs, "Noi-Notizen")
+    os.makedirs(d, exist_ok=True)
+    return d
+
+
+def title_of(text):
+    for line in text.splitlines():
+        line = line.strip().lstrip("#").strip()
+        if line:
+            return line[:80]
+    return "Neue Notiz"
+
+
+def safe_name(title):
+    name = re.sub(r'[\\/:*?"<>|\x00-\x1f]', "", title).strip(" .")[:60]
+    return name or "Notiz"
+
+
+class Notizen(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.dir = notes_dir()
+        self.current = None       # Pfad der geöffneten Notiz
+        self.loading = False
+        self.dirty = False        # ungespeicherte Änderungen
+        self.setWindowTitle("Noi-Notizen")
+        self.setWindowIcon(QIcon.fromTheme("knotes", QIcon.fromTheme("accessories-text-editor")))
+        self.resize(860, 560)
+
+        self.search = QLineEdit()
+        self.search.setPlaceholderText("Suchen …  (Strg+F)")
+        self.search.setClearButtonEnabled(True)
+        self.search.textChanged.connect(self.reload_list)
+        self.list = QListWidget()
+        self.list.currentItemChanged.connect(self.on_select)
+        new = QPushButton(QIcon.fromTheme("document-new"), "Neu")
+        new.setToolTip("Neue Notiz (Strg+N)")
+        new.clicked.connect(self.new_note)
+        delete = QPushButton(QIcon.fromTheme("edit-delete"), "Löschen")
+        delete.clicked.connect(self.delete_note)
+        buttons = QHBoxLayout()
+        buttons.addWidget(new)
+        buttons.addWidget(delete)
+        left = QWidget()
+        ll = QVBoxLayout(left)
+        ll.setContentsMargins(0, 0, 0, 0)
+        ll.addWidget(self.search)
+        ll.addWidget(self.list, 1)
+        ll.addLayout(buttons)
+
+        self.editor = QPlainTextEdit()
+        self.editor.setFont(QFont("Noto Sans", 11))
+        self.editor.setPlaceholderText("Schreib los – die erste Zeile wird der Titel.")
+        self.editor.textChanged.connect(self.on_edit)
+        self.status = QLabel()
+        right = QWidget()
+        rl = QVBoxLayout(right)
+        rl.setContentsMargins(0, 0, 0, 0)
+        rl.addWidget(self.editor, 1)
+        rl.addWidget(self.status)
+
+        split = QSplitter(Qt.Horizontal)
+        split.addWidget(left)
+        split.addWidget(right)
+        split.setStretchFactor(1, 1)
+        split.setSizes([240, 620])
+        lay = QVBoxLayout(self)
+        lay.addWidget(split)
+
+        self.save_timer = QTimer(self)
+        self.save_timer.setSingleShot(True)
+        self.save_timer.setInterval(800)
+        self.save_timer.timeout.connect(self.save)
+        QShortcut(QKeySequence.New, self, self.new_note)
+        QShortcut(QKeySequence.Find, self, self.search.setFocus)
+        QShortcut(QKeySequence.Save, self, self.save)
+
+        self.reload_list()
+        if self.list.count():
+            self.list.setCurrentRow(0)
+        else:
+            self.new_note()
+
+    # --- Dateien -------------------------------------------------------------------
+    def files(self):
+        try:
+            paths = [os.path.join(self.dir, f) for f in os.listdir(self.dir)
+                     if f.endswith(".txt")]
+        except OSError:
+            return []
+        return sorted(paths, key=lambda p: os.path.getmtime(p) if os.path.exists(p) else 0,
+                      reverse=True)
+
+    @staticmethod
+    def read(path):
+        try:
+            with open(path, encoding="utf-8", errors="replace") as f:
+                return f.read()
+        except OSError:
+            return ""
+
+    def reload_list(self, *_):
+        needle = self.search.text().strip().lower()
+        self.list.blockSignals(True)
+        self.list.clear()
+        for path in self.files():
+            text = self.read(path)
+            if needle and needle not in text.lower():
+                continue
+            item = QListWidgetItem(title_of(text))
+            item.setData(Qt.UserRole, path)
+            item.setToolTip(time.strftime("%d.%m.%Y %H:%M", time.localtime(os.path.getmtime(path))))
+            self.list.addItem(item)
+            if path == self.current:
+                self.list.setCurrentItem(item)
+        self.list.blockSignals(False)
+
+    def on_select(self, item, _prev=None):
+        self.save()
+        if item is None:
+            return
+        self.current = item.data(Qt.UserRole)
+        self.loading = True
+        self.editor.setPlainText(self.read(self.current))
+        self.loading = False
+        self.dirty = False
+        self.status.setText("")
+
+    def on_edit(self):
+        if not self.loading:
+            self.dirty = True
+            self.status.setText("…")
+            self.save_timer.start()
+
+    def unique_path(self, title, keep=None):
+        base = safe_name(title)
+        path = os.path.join(self.dir, base + ".txt")
+        n = 2
+        while os.path.exists(path) and path != keep:
+            path = os.path.join(self.dir, f"{base} ({n}).txt")
+            n += 1
+        return path
+
+    def save(self):
+        self.save_timer.stop()
+        if self.loading or not self.current or not self.dirty:
+            return
+        text = self.editor.toPlainText()
+        target = self.unique_path(title_of(text), keep=self.current)
+        try:
+            tmp = target + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as f:
+                f.write(text)
+            os.replace(tmp, target)
+            if target != self.current and os.path.exists(self.current):
+                os.remove(self.current)
+        except OSError as e:
+            self.status.setText(f"Speichern fehlgeschlagen: {e}")
+            return
+        self.current = target
+        self.dirty = False
+        self.status.setText("Gespeichert " + time.strftime("%H:%M:%S"))
+        self.reload_list()
+
+    def new_note(self):
+        self.save()
+        self.search.clear()
+        path = self.unique_path("Neue Notiz")
+        try:
+            with open(path, "w", encoding="utf-8"):
+                pass
+        except OSError as e:
+            QMessageBox.warning(self, "Noi-Notizen", f"Notiz konnte nicht angelegt werden:\n{e}")
+            return
+        self.current = path
+        self.reload_list()
+        self.loading = True
+        self.editor.clear()
+        self.loading = False
+        self.dirty = False
+        self.editor.setFocus()
+
+    def delete_note(self):
+        if not self.current:
+            return
+        title = title_of(self.editor.toPlainText())
+        if self.editor.toPlainText().strip() and QMessageBox.question(
+                self, "Noi-Notizen", f"Notiz „{title}“ wirklich löschen?") != QMessageBox.Yes:
+            return
+        self.save_timer.stop()
+        try:
+            os.remove(self.current)
+        except OSError:
+            pass
+        self.current = None
+        self.loading = True
+        self.editor.clear()
+        self.loading = False
+        self.dirty = False
+        self.reload_list()
+        if self.list.count():
+            self.list.setCurrentRow(0)
+        else:
+            self.new_note()
+
+    def closeEvent(self, event):
+        self.save()
+        # leere, nie beschriebene Notiz nicht liegen lassen
+        if self.current and os.path.exists(self.current) and os.path.getsize(self.current) == 0:
+            os.remove(self.current)
+        super().closeEvent(event)
+
+
+def main():
+    app = QApplication(sys.argv)
+    app.setApplicationName("noi-notizen")
+    app.setApplicationDisplayName("Noi-Notizen")
+    app.setDesktopFileName("noi-notizen")
+    win = Notizen()
+    win.show()
+    return app.exec_()
+
+
+if __name__ == "__main__":
+    sys.exit(main())

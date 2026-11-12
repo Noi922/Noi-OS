@@ -18,6 +18,8 @@ PKG="$STAGE/pkg"
 
 cp -a "$HERE/files" "$PKG"
 cp -a "$HERE/DEBIAN" "$PKG/DEBIAN"
+# Python-Zwischendateien (entstehen beim lokalen Testen) gehören nicht ins Paket
+find "$PKG" -type d -name __pycache__ -prune -exec rm -rf {} +
 
 # --- Grafiken rendern ------------------------------------------------------
 svg="$STAGE/wallpaper.svg"

@@ -129,6 +129,7 @@ printf '#!/bin/sh\nexit 101\n' > /usr/sbin/policy-rc.d; chmod +x /usr/sbin/polic
 
 # Live-Werkzeuge entfernen (Calamares bleibt für den Assistenten)
 apt-get purge -y casper || true
+rm -f /usr/libexec/noios-installer-cleanup   # nur für die ISO-Installation
 rm -f /usr/share/initramfs-tools/scripts/casper-bottom/34noios_live_settings
 
 # --- OEM-Modus: temporärer Benutzer "oem" startet beim ersten Boot den
@@ -143,6 +144,14 @@ chmod 440 /etc/sudoers
 # Assistent auf Noi OS umstellen
 rm -rf /etc/calamares/branding/kubuntu /home/oem/Desktop
 sed -i 's/^branding:.*/branding: ${DISTRO_ID}/' /etc/calamares/settings.conf
+# Der Assistent entfernt am Ende nur Calamares – dafür braucht es keine frischen
+# Paketlisten. "update_db: true" ließe die Ersteinrichtung mit "Paketmanager-
+# Fehler" scheitern, sobald der Spiegelserver gerade nicht erreichbar ist.
+sed -i 's/^update_db:.*/update_db: false/' /etc/calamares/modules/packages.conf
+# Internet-Prüfung des Assistenten: Calamares zählt nur Adressen mit Inhalt als
+# "online" (siehe chroot/setup.sh). Ubuntus Archiv statt der fremden Seite lubuntu.me.
+sed -i 's|^\(\s*internetCheckUrl:\).*|\1 [ "http://archive.ubuntu.com/ubuntu/dists/${UBUNTU_CODENAME}/Release.gpg", "http://security.ubuntu.com/ubuntu/dists/${UBUNTU_CODENAME}-security/Release.gpg", "http://detectportal.firefox.com/success.txt" ]|' \
+    /etc/calamares/modules/welcome.conf
 # Standard-Zeitzone im Assistenten (ohne Internet; online erkennt GeoIP den Standort)
 sed -i -e 's|^region:.*|region: "${TIMEZONE%%/*}"|' \
        -e 's|^zone:.*|zone: "${TIMEZONE#*/}"|' /etc/calamares/modules/locale.conf

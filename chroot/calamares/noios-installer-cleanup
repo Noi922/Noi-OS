@@ -1,0 +1,55 @@
+#!/bin/sh
+# Noi OS: Installer und Live-Werkzeuge aus dem frisch installierten System
+# entfernen. Läuft am Ende der Installation im Zielsystem (Calamares-Schritt
+# shellprocess@noios_cleanup).
+#
+# Ersetzt die "remove"-Liste aus Kubuntus packages.conf. Die brach die
+# Installation mit "Fehler im Paketmanager … Fehlercode 100" ab: apt-get
+# scheitert komplett, sobald EIN Name der Liste unbekannt ist – und ohne
+# frische Paketlisten (kein Internet, Spiegelserver nicht erreichbar) kennt
+# apt nicht installierte Pakete wie kubuntu-installer-prompt gar nicht.
+#
+# Hier wird nur entfernt, was wirklich installiert ist, und kein Fehler
+# bricht die Installation ab: schlimmstenfalls bleibt ein Paket übrig.
+export DEBIAN_FRONTEND=noninteractive LC_ALL=C
+
+installed() {
+    dpkg-query -W -f='${Status}' "$1" 2>/dev/null | grep -q '^install ok installed$'
+}
+
+# Unsere robuste automirror-Fassung liegt per dpkg-divert über der von Ubuntu;
+# vor dem Entfernen des Pakets sauber zurückbauen.
+for am in /usr/lib/*/calamares/modules/automirror; do
+    [ -f "$am/main.py.ubuntu" ] || continue
+    rm -f "$am/main.py"
+    dpkg-divert --local --rename --remove "$am/main.py" >/dev/null 2>&1 \
+        || rm -f "$am/main.py.ubuntu"
+    rm -rf "$am/__pycache__"
+done
+
+todo=""
+for p in calamares-settings-kubuntu calamares-settings-ubuntu-common calamares \
+         casper kubuntu-installer-prompt \
+         $(dpkg-query -W -f='${Package}\n' 'live-*' 2>/dev/null); do
+    installed "$p" && todo="$todo $p"
+done
+
+rc=0
+if [ -n "$todo" ]; then
+    echo "noios-installer-cleanup: entferne$todo"
+    # shellcheck disable=SC2086 # Paketliste absichtlich in Wörter zerlegen
+    if ! apt-get --purge -q -y remove $todo; then
+        # Ein Paket macht Ärger? Dann einzeln, damit der Rest trotzdem geht.
+        for p in $todo; do
+            apt-get --purge -q -y remove "$p" \
+                || { echo "noios-installer-cleanup: $p blieb installiert" >&2; rc=1; }
+        done
+    fi
+    apt-get --purge -q -y autoremove || rc=1
+else
+    echo "noios-installer-cleanup: nichts zu entfernen"
+fi
+
+# Dieses Skript wird danach nicht mehr gebraucht
+installed calamares || rm -f "$0"
+exit $rc

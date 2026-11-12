@@ -1,0 +1,174 @@
+#!/usr/bin/env python3
+"""Noi-Fokus – Konzentrations-Timer (Pomodoro-Methode).
+
+25 Minuten arbeiten, 5 Minuten Pause, nach vier Runden eine lange Pause.
+Zeiten lassen sich einstellen; am Ende jeder Phase kommt eine Benachrichtigung.
+"""
+import shutil
+import subprocess
+import sys
+
+try:
+    from PyQt5.QtCore import Qt, QTimer
+    from PyQt5.QtGui import QFont, QIcon
+    from PyQt5.QtWidgets import (QApplication, QFormLayout, QHBoxLayout, QLabel,
+                                 QProgressBar, QPushButton, QSpinBox, QVBoxLayout,
+                                 QWidget)
+except ImportError:
+    sys.stderr.write("Noi-Fokus braucht PyQt5:  sudo apt install python3-pyqt5\n")
+    sys.exit(1)
+
+ARBEIT, PAUSE, LANGE_PAUSE = "Fokus", "Pause", "Lange Pause"
+
+
+class Ablauf:
+    """Reine Logik (ohne Oberfläche) – dadurch automatisch testbar."""
+
+    def __init__(self, arbeit=25, pause=5, lang=15, runden=4):
+        self.min = {ARBEIT: arbeit, PAUSE: pause, LANGE_PAUSE: lang}
+        self.runden = runden
+        self.fertig = 0            # abgeschlossene Fokus-Runden
+        self.phase = ARBEIT
+        self.rest = self.dauer()
+
+    def dauer(self):
+        return max(1, int(self.min[self.phase])) * 60
+
+    def tick(self):
+        """Eine Sekunde weiter. Gibt die neue Phase zurück, wenn gewechselt wurde."""
+        self.rest -= 1
+        if self.rest > 0:
+            return None
+        return self.weiter()
+
+    def weiter(self):
+        if self.phase == ARBEIT:
+            self.fertig += 1
+            self.phase = LANGE_PAUSE if self.fertig % self.runden == 0 else PAUSE
+        else:
+            self.phase = ARBEIT
+        self.rest = self.dauer()
+        return self.phase
+
+    def zurueck(self):
+        self.fertig = 0
+        self.phase = ARBEIT
+        self.rest = self.dauer()
+
+
+class Fokus(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.a = Ablauf()
+        self.setWindowTitle("Noi-Fokus")
+        self.setWindowIcon(QIcon.fromTheme("chronometer", QIcon.fromTheme("appointment-new")))
+        self.resize(380, 420)
+
+        self.phase = QLabel()
+        self.phase.setAlignment(Qt.AlignCenter)
+        self.zeit = QLabel()
+        self.zeit.setAlignment(Qt.AlignCenter)
+        f = QFont()
+        f.setPointSize(54)
+        f.setBold(True)
+        self.zeit.setFont(f)
+        self.bar = QProgressBar()
+        self.bar.setTextVisible(False)
+        self.runden = QLabel()
+        self.runden.setAlignment(Qt.AlignCenter)
+
+        self.start = QPushButton()
+        self.start.setMinimumHeight(44)
+        self.start.clicked.connect(self.toggle)
+        skip = QPushButton(QIcon.fromTheme("media-skip-forward"), "Überspringen")
+        skip.clicked.connect(lambda: self.wechsel(self.a.weiter(), melden=False))
+        reset = QPushButton(QIcon.fromTheme("view-refresh"), "Zurücksetzen")
+        reset.clicked.connect(self.reset)
+        row = QHBoxLayout()
+        row.addWidget(skip)
+        row.addWidget(reset)
+
+        form = QFormLayout()
+        self.spins = {}
+        for key, label, lo, hi in [(ARBEIT, "Fokus (Min.)", 1, 180), (PAUSE, "Pause (Min.)", 1, 60),
+                                   (LANGE_PAUSE, "Lange Pause (Min.)", 1, 120)]:
+            s = QSpinBox()
+            s.setRange(lo, hi)
+            s.setValue(self.a.min[key])
+            s.valueChanged.connect(lambda v, k=key: self.set_min(k, v))
+            self.spins[key] = s
+            form.addRow(label, s)
+
+        lay = QVBoxLayout(self)
+        lay.addWidget(self.phase)
+        lay.addWidget(self.zeit)
+        lay.addWidget(self.bar)
+        lay.addWidget(self.runden)
+        lay.addWidget(self.start)
+        lay.addLayout(row)
+        lay.addStretch(1)
+        lay.addLayout(form)
+
+        self.timer = QTimer(self)
+        self.timer.setInterval(1000)
+        self.timer.timeout.connect(self.tick)
+        self.show_state()
+
+    def set_min(self, key, value):
+        self.a.min[key] = value
+        if key == self.a.phase and not self.timer.isActive():
+            self.a.rest = self.a.dauer()
+        self.show_state()
+
+    def toggle(self):
+        if self.timer.isActive():
+            self.timer.stop()
+        else:
+            self.timer.start()
+        self.show_state()
+
+    def reset(self):
+        self.timer.stop()
+        self.a.zurueck()
+        self.show_state()
+
+    def tick(self):
+        self.wechsel(self.a.tick(), melden=True)
+
+    def wechsel(self, neu, melden):
+        if neu and melden:
+            text = ("Zeit für eine Pause!" if neu != ARBEIT else "Weiter geht's – Fokus!")
+            if shutil.which("notify-send"):
+                subprocess.Popen(["notify-send", "-a", "Noi-Fokus", "-i", "chronometer",
+                                  f"{neu} ({self.a.min[neu]} Min.)", text])
+            QApplication.alert(self)
+            QApplication.beep()
+        self.show_state()
+
+    def show_state(self):
+        m, s = divmod(max(0, self.a.rest), 60)
+        self.phase.setText(f"<h2>{self.a.phase}</h2>")
+        self.zeit.setText(f"{m:02d}:{s:02d}")
+        total = self.a.dauer()
+        self.bar.setRange(0, total)
+        self.bar.setValue(max(0, min(total, total - self.a.rest)))
+        self.runden.setText(f"Abgeschlossene Fokus-Runden: {self.a.fertig}")
+        self.setWindowTitle(f"{m:02d}:{s:02d} – {self.a.phase} – Noi-Fokus")
+        running = self.timer.isActive()
+        self.start.setText("Pause" if running else "Start")
+        self.start.setIcon(QIcon.fromTheme("media-playback-pause" if running
+                                           else "media-playback-start"))
+
+
+def main():
+    app = QApplication(sys.argv)
+    app.setApplicationName("noi-fokus")
+    app.setApplicationDisplayName("Noi-Fokus")
+    app.setDesktopFileName("noi-fokus")
+    win = Fokus()
+    win.show()
+    return app.exec_()
+
+
+if __name__ == "__main__":
+    sys.exit(main())

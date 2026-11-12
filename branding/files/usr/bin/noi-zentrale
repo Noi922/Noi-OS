@@ -1,0 +1,350 @@
+#!/usr/bin/env python3
+"""Noi-Zentrale – die grafische Schaltzentrale von Noi OS.
+
+Übersicht (Auslastung live), Pflege (Update, Aufräumen, Sicherung, Doktor),
+Aussehen (Farbschema, Camo-Hintergründe) und App-Empfehlungen (Flathub).
+"""
+import os
+import shutil
+import subprocess
+import sys
+
+try:
+    from PyQt5.QtCore import QProcess, QSize, Qt, QTimer, QUrl
+    from PyQt5.QtGui import QDesktopServices, QFont, QIcon, QPixmap
+    from PyQt5.QtWidgets import (QApplication, QFrame, QGridLayout, QHBoxLayout,
+                                 QLabel, QMessageBox, QPlainTextEdit, QProgressBar,
+                                 QPushButton, QScrollArea, QSizePolicy, QTabWidget, QToolButton,
+                                 QVBoxLayout, QWidget)
+except ImportError:
+    sys.stderr.write("Noi-Zentrale braucht PyQt5:  sudo apt install python3-pyqt5\n")
+    sys.exit(1)
+
+WALLPAPERS = [("wald", "Wald", "NoiCamo"), ("wueste", "Wüste", "NoiCamoWueste"),
+              ("nacht", "Nacht", "NoiCamoNacht"), ("winter", "Winter", "NoiCamoWinter")]
+
+# (Name, Beschreibung, Flathub-ID, Symbolname)
+APPS = [
+    ("Steam", "Spiele-Plattform", "com.valvesoftware.Steam", "steam"),
+    ("Discord", "Sprach- und Textchat", "com.discordapp.Discord", "discord"),
+    ("Spotify", "Musik-Streaming", "com.spotify.Client", "spotify"),
+    ("Thunderbird", "E-Mail und Kalender", "org.mozilla.Thunderbird", "thunderbird"),
+    ("Signal", "Sicherer Messenger", "org.signal.Signal", "signal-desktop"),
+    ("OBS Studio", "Aufnehmen und streamen", "com.obsproject.Studio", "obs"),
+    ("Kdenlive", "Videos schneiden", "org.kde.kdenlive", "kdenlive"),
+    ("Inkscape", "Vektorgrafik", "org.inkscape.Inkscape", "inkscape"),
+    ("Krita", "Digital malen", "org.kde.krita", "krita"),
+    ("Audacity", "Ton bearbeiten", "org.audacityteam.Audacity", "audacity"),
+    ("VS Codium", "Code-Editor", "com.vscodium.codium", "vscodium"),
+    ("Bottles", "Windows-Programme", "com.usebottles.bottles", "wine"),
+]
+
+
+# --- Systemdaten (ohne Zusatzpakete, direkt aus /proc) -------------------------
+def os_release():
+    data = {}
+    try:
+        with open("/etc/os-release", encoding="utf-8") as f:
+            for line in f:
+                if "=" in line:
+                    k, v = line.rstrip("\n").split("=", 1)
+                    data[k] = v.strip('"')
+    except OSError:
+        pass
+    return data
+
+
+def cpu_times():
+    try:
+        with open("/proc/stat") as f:
+            parts = [int(x) for x in f.readline().split()[1:]]
+        idle = parts[3] + (parts[4] if len(parts) > 4 else 0)
+        return sum(parts), idle
+    except (OSError, ValueError, IndexError):
+        return 0, 0
+
+
+def mem_percent():
+    info = {}
+    try:
+        with open("/proc/meminfo") as f:
+            for line in f:
+                k, v = line.split(":", 1)
+                info[k] = int(v.split()[0])
+        total, avail = info["MemTotal"], info.get("MemAvailable", info.get("MemFree", 0))
+        return round((total - avail) * 100 / total), (total - avail) / 1048576, total / 1048576
+    except (OSError, ValueError, KeyError, ZeroDivisionError):
+        return 0, 0.0, 0.0
+
+
+def disk_percent(path="/"):
+    try:
+        u = shutil.disk_usage(path)
+        return round(u.used * 100 / u.total), u.used / 1e9, u.total / 1e9
+    except (OSError, ZeroDivisionError):
+        return 0, 0.0, 0.0
+
+
+def uptime_text():
+    try:
+        with open("/proc/uptime") as f:
+            s = int(float(f.read().split()[0]))
+    except (OSError, ValueError, IndexError):
+        return "?"
+    d, s = divmod(s, 86400)
+    h, s = divmod(s, 3600)
+    m = s // 60
+    return (f"{d} Tg. " if d else "") + (f"{h} Std. " if h or d else "") + f"{m} Min."
+
+
+def cpu_name():
+    try:
+        with open("/proc/cpuinfo") as f:
+            for line in f:
+                if line.startswith("model name"):
+                    return line.split(":", 1)[1].strip()
+    except OSError:
+        pass
+    return "?"
+
+
+def in_terminal(*cmd):
+    """Befehl in Konsole ausführen (für alles, was ein Passwort braucht)."""
+    env = dict(os.environ, NOI_PAUSE="1")
+    for term in (["konsole", "--hide-menubar", "-e"], ["x-terminal-emulator", "-e"],
+                 ["xterm", "-e"]):
+        if shutil.which(term[0]):
+            subprocess.Popen(term + list(cmd), env=env)
+            return True
+    return False
+
+
+class Zentrale(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.osr = os_release()
+        self.setWindowTitle("Noi-Zentrale")
+        self.setWindowIcon(QIcon.fromTheme("noios-logo", QIcon.fromTheme("preferences-system")))
+        self.resize(780, 560)
+        tabs = QTabWidget(self)
+        tabs.addTab(self._tab_uebersicht(), QIcon.fromTheme("computer"), "Übersicht")
+        tabs.addTab(self._tab_pflege(), QIcon.fromTheme("system-software-update"), "Pflege")
+        tabs.addTab(self._tab_aussehen(), QIcon.fromTheme("preferences-desktop-theme"), "Aussehen")
+        tabs.addTab(self._tab_apps(), QIcon.fromTheme("plasmadiscover"), "Apps")
+        lay = QVBoxLayout(self)
+        lay.addWidget(tabs)
+        self._last_cpu = cpu_times()
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.refresh)
+        self.timer.start(1500)
+        self.refresh()
+
+    # --- Übersicht ---------------------------------------------------------------
+    def _tab_uebersicht(self):
+        w = QWidget()
+        lay = QVBoxLayout(w)
+        head = QHBoxLayout()
+        logo = QLabel()
+        pm = QIcon.fromTheme("noios-logo").pixmap(QSize(96, 96))
+        if pm.isNull():
+            pm = QPixmap("/usr/share/pixmaps/noios-logo.png")
+            if not pm.isNull():
+                pm = pm.scaled(96, 96, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        logo.setPixmap(pm)
+        head.addWidget(logo)
+        title = QLabel(f"<h1>{self.osr.get('PRETTY_NAME', 'Noi OS')}</h1>"
+                       f"<p>Kernel {os.uname().release}<br>{cpu_name()}</p>")
+        title.setTextFormat(Qt.RichText)
+        head.addWidget(title, 1)
+        lay.addLayout(head)
+
+        grid = QGridLayout()
+        self.bars = {}
+        for row, (key, label) in enumerate([("cpu", "Prozessor"), ("mem", "Arbeitsspeicher"),
+                                            ("disk", "Festplatte")]):
+            bar = QProgressBar()
+            bar.setRange(0, 100)
+            text = QLabel()
+            text.setMinimumWidth(170)
+            grid.addWidget(QLabel(f"<b>{label}</b>"), row, 0)
+            grid.addWidget(bar, row, 1)
+            grid.addWidget(text, row, 2)
+            self.bars[key] = (bar, text)
+        lay.addLayout(grid)
+        self.uptime = QLabel()
+        lay.addWidget(self.uptime)
+        lay.addStretch(1)
+        links = QHBoxLayout()
+        for text, url in [("Projektseite", self.osr.get("HOME_URL")),
+                          ("Hilfe && Fehler melden", self.osr.get("SUPPORT_URL"))]:
+            if url:
+                b = QPushButton(QIcon.fromTheme("internet-web-browser"), text)
+                b.clicked.connect(lambda _=False, u=url: QDesktopServices.openUrl(QUrl(u)))
+                links.addWidget(b)
+        links.addStretch(1)
+        lay.addLayout(links)
+        return w
+
+    def refresh(self):
+        total, idle = cpu_times()
+        dt, di = total - self._last_cpu[0], idle - self._last_cpu[1]
+        self._last_cpu = (total, idle)
+        cpu = round((dt - di) * 100 / dt) if dt > 0 else 0
+        self.bars["cpu"][0].setValue(max(0, min(100, cpu)))
+        self.bars["cpu"][1].setText(f"{os.cpu_count() or 1} Kerne")
+        p, used, tot = mem_percent()
+        self.bars["mem"][0].setValue(p)
+        self.bars["mem"][1].setText(f"{used:.1f} von {tot:.1f} GiB")
+        p, used, tot = disk_percent()
+        self.bars["disk"][0].setValue(p)
+        self.bars["disk"][1].setText(f"{used:.0f} von {tot:.0f} GB")
+        self.uptime.setText(f"Läuft seit {uptime_text()}")
+
+    # --- Pflege --------------------------------------------------------------------
+    def _tab_pflege(self):
+        w = QWidget()
+        lay = QVBoxLayout(w)
+        grid = QGridLayout()
+        actions = [
+            ("System aktualisieren", "system-software-update",
+             "System, Flatpak-Apps und Firmware", lambda: self.term("update")),
+            ("Speicher aufräumen", "edit-clear-all",
+             "Alte Pakete und Zwischenspeicher entfernen", lambda: self.term("aufraeumen")),
+            ("Sicherung erstellen", "document-save",
+             "Systemschnappschuss mit Timeshift", lambda: self.term("sicherung")),
+            ("System prüfen", "dialog-ok-apply",
+             "Noi-Doktor: Speicher, Dienste, Netz, Akku", self.doktor),
+        ]
+        for i, (text, icon, tip, fn) in enumerate(actions):
+            b = QPushButton(QIcon.fromTheme(icon), "  " + text)
+            b.setIconSize(QSize(32, 32))
+            b.setMinimumHeight(56)
+            b.setToolTip(tip)
+            b.clicked.connect(fn)
+            grid.addWidget(b, i // 2, i % 2)
+        lay.addLayout(grid)
+        self.output = QPlainTextEdit()
+        self.output.setReadOnly(True)
+        self.output.setFont(QFont("monospace"))
+        self.output.setPlaceholderText("Ergebnis von „System prüfen“ erscheint hier.")
+        lay.addWidget(self.output, 1)
+        self.proc = None
+        return w
+
+    def term(self, sub):
+        if not shutil.which("noi"):
+            QMessageBox.warning(self, "Noi-Zentrale", "Das Werkzeug „noi“ wurde nicht gefunden.")
+        elif not in_terminal("noi", sub):
+            QMessageBox.warning(self, "Noi-Zentrale", "Kein Terminal-Programm gefunden.")
+
+    def doktor(self):
+        if self.proc and self.proc.state() != QProcess.NotRunning:
+            return
+        self.output.setPlainText("Prüfe …\n")
+        self.proc = QProcess(self)
+        self.proc.setProcessChannelMode(QProcess.MergedChannels)
+        self.proc.readyReadStandardOutput.connect(self._doktor_out)
+        self.proc.errorOccurred.connect(
+            lambda _e: self.output.appendPlainText("„noi doktor“ konnte nicht gestartet werden."))
+        self.proc.start("noi", ["doktor"])
+
+    def _doktor_out(self):
+        data = bytes(self.proc.readAllStandardOutput()).decode("utf-8", "replace")
+        self.output.appendPlainText(data.rstrip("\n"))
+
+    # --- Aussehen ------------------------------------------------------------------
+    def _tab_aussehen(self):
+        w = QWidget()
+        lay = QVBoxLayout(w)
+        lay.addWidget(QLabel("<h3>Farbschema</h3>"))
+        row = QHBoxLayout()
+        for text, arg, icon in [("Dunkel (Noi Camo)", "dunkel", "weather-clear-night"),
+                                ("Hell (Noi Camo Hell)", "hell", "weather-clear")]:
+            b = QPushButton(QIcon.fromTheme(icon), text)
+            b.setMinimumHeight(40)
+            b.clicked.connect(lambda _=False, a=arg: self.noi("thema", a))
+            row.addWidget(b)
+        lay.addLayout(row)
+        lay.addWidget(QLabel("<h3>Hintergrundbild</h3>"))
+        row = QHBoxLayout()
+        for arg, label, wid in WALLPAPERS:
+            b = QToolButton()
+            b.setToolButtonStyle(Qt.ToolButtonTextUnderIcon)
+            b.setText(label)
+            shot = f"/usr/share/wallpapers/{wid}/contents/screenshot.png"
+            b.setIcon(QIcon(shot) if os.path.exists(shot) else QIcon.fromTheme("image-x-generic"))
+            b.setIconSize(QSize(160, 90))
+            b.clicked.connect(lambda _=False, a=arg: self.noi("hintergrund", a))
+            row.addWidget(b)
+        lay.addLayout(row)
+        self.look_status = QLabel()
+        lay.addWidget(self.look_status)
+        lay.addStretch(1)
+        more = QPushButton(QIcon.fromTheme("preferences-system"), "Alle Systemeinstellungen …")
+        more.clicked.connect(lambda: self.start(["systemsettings"]))
+        lay.addWidget(more, 0, Qt.AlignLeft)
+        return w
+
+    def noi(self, *args):
+        try:
+            r = subprocess.run(["noi", *args], capture_output=True, text=True, timeout=30)
+            msg = (r.stdout + r.stderr).strip()
+        except (OSError, subprocess.TimeoutExpired) as e:
+            msg = f"Fehler: {e}"
+        self.look_status.setText(msg)
+
+    def start(self, cmd):
+        try:
+            subprocess.Popen(cmd)
+        except OSError:
+            QMessageBox.warning(self, "Noi-Zentrale", f"„{cmd[0]}“ wurde nicht gefunden.")
+
+    # --- Apps ------------------------------------------------------------------------
+    def _tab_apps(self):
+        inner = QWidget()
+        grid = QGridLayout(inner)
+        info = QLabel("Beliebte Programme von Flathub. Ein Klick öffnet die Seite der App in "
+                      "<b>Discover</b> – dort auf „Installieren“ klicken.")
+        info.setWordWrap(True)
+        grid.addWidget(info, 0, 0, 1, 3)
+        for i, (name, desc, app_id, icon) in enumerate(APPS):
+            b = QToolButton()
+            b.setToolButtonStyle(Qt.ToolButtonTextUnderIcon)
+            b.setIcon(QIcon.fromTheme(icon, QIcon.fromTheme("application-x-executable")))
+            b.setIconSize(QSize(48, 48))
+            b.setText(f"{name}\n{desc}")
+            b.setMinimumSize(200, 110)
+            b.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+            b.clicked.connect(lambda _=False, a=app_id: self.open_app(a))
+            grid.addWidget(b, 1 + i // 3, i % 3)
+        grid.setRowStretch(2 + len(APPS) // 3, 1)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setWidget(inner)
+        return scroll
+
+    def open_app(self, app_id):
+        if shutil.which("plasma-discover"):
+            self.start(["plasma-discover", "--application", f"appstream://{app_id}"])
+        else:
+            QDesktopServices.openUrl(QUrl(f"https://flathub.org/apps/{app_id}"))
+
+
+def main():
+    app = QApplication(sys.argv)
+    app.setApplicationName("noi-zentrale")
+    app.setApplicationDisplayName("Noi-Zentrale")
+    app.setDesktopFileName("noi-zentrale")
+    win = Zentrale()
+    win.show()
+    shot = os.environ.get("NOI_SCREENSHOT")   # nur für automatische Tests
+    if shot:
+        tab = int(os.environ.get("NOI_TAB", "0"))
+        win.findChild(QTabWidget).setCurrentIndex(tab)
+        QTimer.singleShot(1200, lambda: (win.grab().save(shot), app.quit()))
+    return app.exec_()
+
+
+if __name__ == "__main__":
+    sys.exit(main())

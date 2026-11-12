@@ -90,6 +90,10 @@ ffmpegthumbs
 kdegraphics-thumbnailers
 kio-extras
 
+# --- Noi-Apps (Noi-Zentrale, Noi-Notizen, Noi-Fokus) --------------------------
+python3-pyqt5
+libnotify-bin
+
 # --- Erste Schritte & Sicherung ----------------------------------------------
 plasma-welcome
 timeshift
