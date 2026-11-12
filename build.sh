@@ -105,6 +105,7 @@ stage_chroot() {
     mkdir -p "$B"
     cp "$ROOT/config.sh" "$ROOT/config/packages.list" "$ROOT/chroot/setup.sh" "$B/"
     cp "$WORK"/*-branding_*.deb "$B/"
+    cp -r "$ROOT/chroot/calamares" "$B/"
     # DNS für den Build: resolv.conf temporär vom Host übernehmen
     mv "$CHROOT/etc/resolv.conf" "$CHROOT/etc/resolv.conf.noi" 2>/dev/null || true
     cp -L /etc/resolv.conf "$CHROOT/etc/resolv.conf"

@@ -181,6 +181,38 @@ sed -i "s/kubuntu-2404/${DISTRO_ID}-${DISTRO_VERSION//./}/" "$CAL/modules/oemid.
 # Nach der Installation: Branding behalten, Installer-Pakete entfernen
 sed -i "s/      - calamares-settings-kubuntu/      - calamares-settings-kubuntu\n      - calamares-settings-ubuntu-common\n      - casper/" \
     "$CAL/modules/packages.conf"
+# Paketquellen-Schritt des Installers ("automirror") durch die robuste
+# Noi-Fassung ersetzen. Das Original bricht die ganze Installation ab
+# ("Main Skriptdatei … automirror/main.py … hat eine Ausnahme ausgelöst"),
+# wenn die Standortabfrage etwas Unerwartetes liefert (Gäste-WLAN mit
+# Anmeldeseite, Verbindungsabbruch) oder /etc/apt/sources.list fehlt.
+# dpkg-divert: ein Paket-Update überschreibt unsere Fassung nicht.
+AM="$(dirname "$(dpkg -L calamares-settings-ubuntu-common | grep '/automirror/main\.py$')")"
+[[ -d $AM ]] || { echo "FEHLER: Calamares-Modul automirror nicht gefunden" >&2; exit 1; }
+dpkg-divert --local --rename --divert "$AM/main.py.ubuntu" --add "$AM/main.py"
+install -m 644 "$B/calamares/automirror.py" "$AM/main.py"
+python3 -m py_compile "$AM/main.py"
+rm -rf "$AM/__pycache__"
+# Paketlisten vor dem Schritt "packages" selbst aktualisieren – und zwar so,
+# dass ein Fehler (Spiegelserver nicht erreichbar, Gäste-WLAN, Zeitüberschreitung)
+# die Installation NICHT abbricht. Calamares' eigenes "update_db" wäre fatal
+# ("Paketmanager-Fehler"). Das "-" vor dem Befehl heißt: Fehler ignorieren.
+cat > "$CAL/modules/shellprocess_noios_aptupdate.conf" <<'EOF'
+---
+# Noi OS: Paketlisten aktualisieren, Fehler sind nicht schlimm
+dontChroot: false
+timeout: 300
+script:
+    - command: "-apt-get -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 -o Acquire::Retries=1 update"
+      timeout: 300
+EOF
+sed -i 's/^update_db:.*/update_db: false/' "$CAL/modules/packages.conf"
+if ! grep -q 'noios_aptupdate' "$CAL/settings.conf"; then
+    sed -i -e 's/^instances:$/&\n- id: noios_aptupdate\n  module: shellprocess\n  config: shellprocess_noios_aptupdate.conf/' \
+           -e 's/^  - packages$/  - shellprocess@noios_aptupdate\n&/' "$CAL/settings.conf"
+fi
+grep -q 'shellprocess@noios_aptupdate' "$CAL/settings.conf" \
+    || { echo "FEHLER: settings.conf von Calamares hat ein unerwartetes Format" >&2; exit 1; }
 # Starter auf dem Live-Desktop
 if [[ -f /usr/share/applications/kubuntu-calamares.desktop ]]; then
     sed -i -e "s/Kubuntu 24.04 LTS/${DISTRO_NAME} ${DISTRO_VERSION}/g" \

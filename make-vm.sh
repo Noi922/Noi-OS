@@ -143,6 +143,10 @@ chmod 440 /etc/sudoers
 # Assistent auf Noi OS umstellen
 rm -rf /etc/calamares/branding/kubuntu /home/oem/Desktop
 sed -i 's/^branding:.*/branding: ${DISTRO_ID}/' /etc/calamares/settings.conf
+# Der Assistent entfernt am Ende nur Calamares – dafür braucht es keine frischen
+# Paketlisten. "update_db: true" ließe die Ersteinrichtung mit "Paketmanager-
+# Fehler" scheitern, sobald der Spiegelserver gerade nicht erreichbar ist.
+sed -i 's/^update_db:.*/update_db: false/' /etc/calamares/modules/packages.conf
 # Standard-Zeitzone im Assistenten (ohne Internet; online erkennt GeoIP den Standort)
 sed -i -e 's|^region:.*|region: "${TIMEZONE%%/*}"|' \
        -e 's|^zone:.*|zone: "${TIMEZONE#*/}"|' /etc/calamares/modules/locale.conf

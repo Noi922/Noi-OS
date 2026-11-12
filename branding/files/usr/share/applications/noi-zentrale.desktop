@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Noi-Zentrale
+GenericName=Noi OS Schaltzentrale
+Comment=Übersicht, Pflege, Aussehen und App-Empfehlungen an einem Ort
+Exec=noi-zentrale
+Icon=noios-logo
+Terminal=false
+Categories=Qt;System;Settings;
+Keywords=noi;zentrale;einstellungen;update;hintergrund;thema;apps;
+StartupWMClass=noi-zentrale

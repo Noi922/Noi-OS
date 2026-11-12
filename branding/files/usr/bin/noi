@@ -4,6 +4,10 @@
 #   noi info        Systeminformationen
 #   noi aufraeumen  Speicherplatz freigeben
 #   noi sicherung   Systemschnappschuss erstellen (Timeshift)
+#   noi doktor      System prüfen (Speicher, Dienste, Updates, Netz, Akku)
+#   noi thema       Farbschema wechseln: hell | dunkel
+#   noi hintergrund Camo-Hintergrundbild wechseln: wald | wueste | nacht | winter
+#   noi zentrale    grafische Noi-Zentrale öffnen
 #   noi hilfe       diese Übersicht
 set -uo pipefail
 
@@ -144,6 +148,158 @@ cmd_info() {
     echo
 }
 
+# --- noi doktor: System-Check --------------------------------------------------
+DOK_WARN=0
+gut()   { echo "  ${G}✔${R} $*"; }
+warn()  { echo "  ${B}!${R} $*"; DOK_WARN=$((DOK_WARN + 1)); }
+
+cmd_doktor() {
+    local n pct frei
+    titel "Noi-Doktor: System wird geprüft"
+
+    # Speicherplatz
+    pct=$(df --output=pcent / | tail -1 | tr -dc 0-9)
+    frei=$(menschlich "$(frei_bytes)")
+    if (( ${pct:-0} >= 90 )); then
+        warn "Festplatte zu ${pct} % voll (frei: $frei) → ${B}noi aufraeumen${R}"
+    else
+        gut "Speicherplatz: ${pct} % belegt, $frei frei"
+    fi
+
+    # Arbeitsspeicher
+    local memfrei
+    memfrei=$(awk '/^MemAvailable/{a=$2} /^MemTotal/{t=$2} END{if(t) printf "%d", a*100/t}' /proc/meminfo)
+    if (( ${memfrei:-100} < 10 )); then
+        warn "Arbeitsspeicher fast voll (nur ${memfrei} % verfügbar) – Programme schließen"
+    else
+        gut "Arbeitsspeicher: ${memfrei} % verfügbar"
+    fi
+
+    # Fehlgeschlagene Dienste
+    if command -v systemctl >/dev/null; then
+        n=$(systemctl --failed --no-legend --plain 2>/dev/null | grep -c . || true)
+        if (( ${n:-0} > 0 )); then
+            warn "$n Systemdienst(e) fehlgeschlagen:"
+            systemctl --failed --no-legend --plain 2>/dev/null | awk '{print "      " $1}'
+        else
+            gut "Alle Systemdienste laufen"
+        fi
+    fi
+
+    # Internet
+    if curl -fsS -o /dev/null -m 8 http://connectivity-check.ubuntu.com 2>/dev/null; then
+        gut "Internetverbindung steht"
+    else
+        warn "Keine Internetverbindung"
+    fi
+
+    # Firewall
+    if systemctl is-enabled --quiet ufw 2>/dev/null \
+            && grep -qs '^ENABLED=yes' /etc/ufw/ufw.conf; then
+        gut "Firewall ist aktiv"
+    else
+        warn "Firewall ist aus → Systemeinstellungen → Firewall"
+    fi
+
+    # Updates
+    if command -v apt-get >/dev/null; then
+        n=$(apt-get -s -o Debug::NoLocking=true full-upgrade 2>/dev/null | grep -c '^Inst ' || true)
+        if (( ${n:-0} > 0 )); then
+            warn "$n Update(s) verfügbar → ${B}noi update${R}"
+        else
+            gut "System ist aktuell (Stand der letzten Prüfung)"
+        fi
+    fi
+    if [[ -f /var/run/reboot-required ]]; then
+        warn "Neustart nötig, damit Updates aktiv werden"
+    fi
+
+    # Sicherung
+    if command -v timeshift >/dev/null; then
+        if [[ -s /etc/timeshift/timeshift.json ]] \
+                && ! grep -q '"backup_device_uuid" *: *""' /etc/timeshift/timeshift.json; then
+            gut "Timeshift (Sicherung) ist eingerichtet"
+        else
+            hinweis "Tipp: Timeshift ist noch nicht eingerichtet (Startmenü → Timeshift)"
+        fi
+    fi
+
+    # Akku
+    local bat voll design gesund
+    for bat in /sys/class/power_supply/BAT*; do
+        [[ -r $bat/capacity ]] || continue
+        voll=$(cat "$bat/energy_full" 2>/dev/null || cat "$bat/charge_full" 2>/dev/null || echo 0)
+        design=$(cat "$bat/energy_full_design" 2>/dev/null \
+                 || cat "$bat/charge_full_design" 2>/dev/null || echo 0)
+        if (( design > 0 )); then
+            gesund=$(( voll * 100 / design ))
+            if (( gesund < 60 )); then
+                warn "Akku ${bat##*/}: nur noch ${gesund} % der ursprünglichen Kapazität"
+            else
+                gut "Akku ${bat##*/}: $(cat "$bat/capacity") % geladen, Zustand ${gesund} %"
+            fi
+        else
+            gut "Akku ${bat##*/}: $(cat "$bat/capacity") % geladen"
+        fi
+    done
+
+    echo
+    if (( DOK_WARN == 0 )); then
+        ok "${B}Alles in Ordnung!${R}"
+    else
+        hinweis "${B}${DOK_WARN} Hinweis(e)${R} – siehe oben."
+        return 1
+    fi
+}
+
+# --- noi thema / noi hintergrund ----------------------------------------------
+cmd_thema() {
+    local schema
+    case "${1:-}" in
+        hell|light)            schema=NoiCamoHell ;;
+        dunkel|dark|camo)      schema=NoiCamo ;;
+        *) fehler "Aufruf: noi thema hell | dunkel"; return 1 ;;
+    esac
+    if ! command -v plasma-apply-colorscheme >/dev/null; then
+        fehler "plasma-apply-colorscheme fehlt (kein KDE Plasma?)"; return 1
+    fi
+    if plasma-apply-colorscheme "$schema" >/dev/null 2>&1; then
+        ok "Farbschema: $schema"
+    else
+        fehler "Farbschema konnte nicht gesetzt werden (läuft eine Plasma-Sitzung?)"; return 1
+    fi
+}
+
+cmd_hintergrund() {
+    local id
+    case "${1:-}" in
+        wald|gruen|grün) id=NoiCamo ;;
+        wueste|wüste)    id=NoiCamoWueste ;;
+        nacht)           id=NoiCamoNacht ;;
+        winter)          id=NoiCamoWinter ;;
+        *) fehler "Aufruf: noi hintergrund wald | wueste | nacht | winter"; return 1 ;;
+    esac
+    local pfad="/usr/share/wallpapers/$id"
+    [[ -d $pfad ]] || { fehler "Hintergrundbild fehlt: $pfad"; return 1; }
+    if ! command -v plasma-apply-wallpaperimage >/dev/null; then
+        fehler "plasma-apply-wallpaperimage fehlt (kein KDE Plasma?)"; return 1
+    fi
+    if plasma-apply-wallpaperimage "$pfad" >/dev/null 2>&1; then
+        ok "Hintergrundbild: $id"
+    else
+        fehler "Hintergrundbild konnte nicht gesetzt werden (läuft eine Plasma-Sitzung?)"; return 1
+    fi
+}
+
+cmd_zentrale() {
+    if command -v noi-zentrale >/dev/null; then
+        noi-zentrale >/dev/null 2>&1 &
+        disown
+    else
+        fehler "Die Noi-Zentrale ist nicht installiert"; return 1
+    fi
+}
+
 cmd_hilfe() {
     cat <<EOF
 
@@ -153,6 +309,10 @@ cmd_hilfe() {
   ${B}noi info${R}         Systeminformationen anzeigen
   ${B}noi aufraeumen${R}   Speicherplatz freigeben
   ${B}noi sicherung${R}    Systemschnappschuss erstellen (vor großen Änderungen)
+  ${B}noi doktor${R}       System prüfen (Speicher, Dienste, Updates, Netz, Akku)
+  ${B}noi thema${R}        Farbschema wechseln: hell | dunkel
+  ${B}noi hintergrund${R}  Hintergrundbild: wald | wueste | nacht | winter
+  ${B}noi zentrale${R}     grafische Noi-Zentrale öffnen
   ${B}noi hilfe${R}        diese Übersicht
 
   Hilfe & Fehler melden: https://github.com/Noi922/Noi-OS/issues
@@ -171,6 +331,10 @@ case "${1:-hilfe}" in
     info|system)          cmd_info ;;
     aufraeumen|clean)     cmd_aufraeumen ;;
     sicherung|backup|snapshot) cmd_sicherung ;;
+    doktor|doctor|check)  cmd_doktor ;;
+    thema|theme)          cmd_thema "${2:-}" ;;
+    hintergrund|wallpaper) cmd_hintergrund "${2:-}" ;;
+    zentrale|gui)         cmd_zentrale ;;
     hilfe|help|-h|--help) cmd_hilfe ;;
     *) fehler "Unbekannter Befehl: $1"; cmd_hilfe; exit 1 ;;
 esac

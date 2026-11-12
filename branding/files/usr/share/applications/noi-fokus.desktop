@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Noi-Fokus
+GenericName=Konzentrations-Timer
+Comment=Pomodoro-Timer: 25 Minuten Fokus, 5 Minuten Pause
+Exec=noi-fokus
+Icon=chronometer
+Terminal=false
+Categories=Qt;Utility;Clock;
+Keywords=pomodoro;timer;fokus;konzentration;lernen;pause;noi;
+StartupWMClass=noi-fokus

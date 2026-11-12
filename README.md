@@ -15,7 +15,7 @@ Sicherheitsupdates bis 2029.
 | Basis | Ubuntu 24.04 LTS, alle Ubuntu-Paketquellen, Sicherheitsupdates bis 2029 |
 | Desktop | KDE Plasma 5.27 (X11 + Wayland) |
 | Design | eigenes Camo-Hintergrundbild (Wald, Wüste, Nacht, Winter), Farbschemata „Noi Camo“ (dunkel) und „Noi Camo Hell“, Konsole im Camo-Look, eigene Boot-Animation und Logo |
-| Installer | Calamares mit eigenem Branding, Vollbild |
+| Installer | Calamares mit eigenem Branding, Vollbild; bricht nicht mehr ab, wenn Standortabfrage oder Spiegelserver nicht erreichbar sind |
 | Fertige VMs | `.ova`, `.qcow2`, `.vhdx` – beim ersten Start eigenes Konto anlegen |
 | Programme | Firefox (direkt von Mozilla), LibreOffice, GIMP, VLC, Elisa (Musik), KeePassXC (Passwörter), Dolphin, Kate, Okular, Gwenview, Spectacle, KolourPaint, Kamoso (Webcam), Filelight, Skanpage, 7-Zip, Spiele (Solitär, Minesweeper, Sudoku) |
 | Multimedia | MP3, MP4/H.264 & Co. laufen sofort (GStreamer- und FFmpeg-Codecs) |
@@ -23,7 +23,8 @@ Sicherheitsupdates bis 2029.
 | Handy | **KDE Connect**: Dateien, Benachrichtigungen und Zwischenablage mit dem Handy teilen |
 | Sicherheit | automatische Sicherheitsupdates (auch Firefox), Firewall aktiv, Secure Boot, AppArmor |
 | System | zram (schneller Auslagerungsspeicher), Timeshift für Sicherungen, Willkommens-Assistent |
-| `noi`-Werkzeug | `noi update` (System + Flatpak + Firmware), `noi info`, `noi aufraeumen`, `noi sicherung` – auch im Startmenü; Flatpak-Apps aktualisieren sich wöchentlich automatisch |
+| `noi`-Werkzeug | `noi update` (System + Flatpak + Firmware), `noi info`, `noi aufraeumen`, `noi sicherung`, `noi doktor` (System-Check), `noi thema hell\|dunkel`, `noi hintergrund wald\|wueste\|nacht\|winter` – auch im Startmenü, mit Tab-Vervollständigung; Flatpak-Apps aktualisieren sich wöchentlich automatisch |
+| Eigene Apps | **Noi-Zentrale** (Auslastung, Pflege, Aussehen, App-Empfehlungen), **Noi-Notizen** (speichert von selbst), **Noi-Fokus** (Pomodoro-Timer) |
 | Komfort | Nachtlicht ab 20 Uhr, GameMode für Spiele, Firefox mit uBlock Origin und ohne Telemetrie |
 | Anzeige | passt sich automatisch an: Skalierung nach Pixeldichte (100–250 %, wie Windows), in VMs wächst die Auflösung mit dem Fenster |
 | VM-Unterstützung | Gastwerkzeuge für VirtualBox, VMware, KVM/Proxmox und Hyper-V |
@@ -40,6 +41,7 @@ noi-os/
 ├── make-vm.sh                ← baut fertige VM-Images (OVA, QCOW2, VHDX)
 ├── test-vm.sh                ← startet die ISO in QEMU
 ├── chroot/setup.sh           ← richtet das System im chroot ein
+├── chroot/calamares/         ← robuster Ersatz für den Installer-Schritt "automirror"
 ├── iso/grub.cfg              ← Bootmenü der Live-ISO
 ├── tools/make-camo-wallpaper.py  ← erzeugt das Camouflage-Hintergrundbild
 └── branding/                 ← Paket "noios-branding"

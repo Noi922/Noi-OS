@@ -38,6 +38,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Schnelltests (Installer-Modul, Skript-Syntax)
+        run: |
+          # Fällt hier etwas auf, sparen wir uns den einstündigen Build
+          python3 tests/test_automirror.py
+          bash -n build.sh chroot/setup.sh make-vm.sh branding/build-deb.sh branding/files/usr/bin/noi
+          python3 -m py_compile branding/files/usr/bin/noi-zentrale \
+              branding/files/usr/bin/noi-notizen branding/files/usr/bin/noi-fokus \
+              branding/files/usr/bin/noios-autoscale chroot/calamares/automirror.py
+
       - name: Speicherplatz freigeben
         run: |
           df -h / /mnt || true

@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=System prüfen
+GenericName=Noi-Doktor
+Comment=Speicher, Dienste, Updates, Netzwerk und Akku prüfen
+Exec=env NOI_PAUSE=1 konsole --hide-menubar -e noi doktor
+Icon=dialog-ok-apply
+Terminal=false
+Categories=System;
+Keywords=doktor;check;prüfen;fehler;diagnose;noi;

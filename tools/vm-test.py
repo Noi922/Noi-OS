@@ -323,6 +323,9 @@ def main():
         # Installer-Fallen (führten zu "Installation gescheitert")
         code, out, _ = qga.run("test -f /etc/apt/sources.list && echo da")
         check("Installer: /etc/apt/sources.list vorhanden (automirror)", out == "da", out or "fehlt")
+        code, out, _ = qga.run("grep -c 'Noi OS' /usr/lib/*/calamares/modules/automirror/main.py")
+        check("Installer: robustes automirror-Modul aktiv", code == 0 and out not in ("", "0"),
+              f"{out} Treffer")
         code, out, _ = qga.run("grep -c 'apt-cdrom\\|apt-get update' /etc/calamares/modules/before_bootloader_context.conf")
         check("Installer: UEFI-Schritt ohne apt-cdrom/apt-get", out == "0", f"{out} Treffer")
         code, out, _ = qga.run("test -f /etc/X11/Xsession.d/99noios-vbox-resize && command -v gcc dkms >/dev/null && echo ja")
@@ -342,6 +345,13 @@ def main():
         code, out, _ = qga.run("for a in keepassxc filelight elisa kolourpaint gimp kamoso kpat kmines ksudoku; do "
                                "dpkg-query -W -f='${Status}' $a 2>/dev/null | grep -q 'ok installed' || echo $a; done")
         check("Apps installiert (KeePassXC, GIMP, …)", out == "", "alle da" if not out else "fehlt: " + out.replace("\n", " "))
+        code, out, _ = qga.run("for a in noi-zentrale noi-notizen noi-fokus; do "
+                               "test -x /usr/bin/$a && python3 -m py_compile /usr/bin/$a || echo $a; done; "
+                               "python3 -c 'import PyQt5.QtWidgets' 2>/dev/null || echo PyQt5")
+        check("Noi-Apps (Zentrale, Notizen, Fokus) startbereit", out == "",
+              "alle da" if not out else "fehlt: " + out.replace("\n", " "), required=False)
+        code, out, _ = qga.run("noi doktor 2>&1 | grep -c '✔'")
+        check("noi doktor läuft", out.isdigit() and int(out) >= 3, f"{out} Prüfungen ok", required=False)
         code, out, _ = qga.run("systemctl is-enabled noios-flatpak-update.timer")
         check("Flatpak-Apps: wöchentliche Updates", out == "enabled", out, required=False)
         code, out, _ = qga.run("ls /usr/share/color-schemes/NoiCamoHell.colors /usr/share/konsole/Noi.profile >/dev/null && echo ja")

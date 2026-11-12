@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Noi-Notizen
+GenericName=Notizen
+Comment=Schnelle Notizen, die sich von selbst speichern
+Exec=noi-notizen
+Icon=knotes
+Terminal=false
+Categories=Qt;Utility;TextTools;
+Keywords=notiz;notizen;notes;merken;text;noi;
+StartupWMClass=noi-notizen
