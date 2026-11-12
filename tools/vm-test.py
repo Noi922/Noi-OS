@@ -323,6 +323,12 @@ def main():
         # Installer-Fallen (führten zu "Installation gescheitert")
         code, out, _ = qga.run("test -f /etc/apt/sources.list && echo da")
         check("Installer: /etc/apt/sources.list vorhanden (automirror)", out == "da", out or "fehlt")
+        # Calamares zählt nur Adressen mit Inhalt als "online" (204/leer = "kein Internet")
+        code, out, _ = qga.run("for u in $(grep internetCheckUrl /etc/calamares/modules/welcome.conf "
+                               "| grep -o 'http[^\" ,]*'); do curl -fsS -m 15 \"$u\" | wc -c; done "
+                               "| sort -n | tail -1", timeout=90)
+        check("Installer: Internet-Prüfung liefert Inhalt", out.isdigit() and int(out) > 0,
+              f"{out or 0} Bytes")
         code, out, _ = qga.run("grep -c 'Noi OS' /usr/lib/*/calamares/modules/automirror/main.py")
         check("Installer: robustes automirror-Modul aktiv", code == 0 and out not in ("", "0"),
               f"{out} Treffer")

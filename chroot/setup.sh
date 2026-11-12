@@ -242,10 +242,20 @@ cat > "$CAL/modules/before_bootloader_context.conf" <<'EOF'
 firmwareType:
     "*": "-/bin/true"
 EOF
-# Lubuntu-Reste im Willkommensbildschirm ersetzen
+# Lubuntu-Reste im Willkommensbildschirm ersetzen.
+# WICHTIG zur Internet-Prüfung: Calamares wertet nur Adressen als "online",
+# die INHALT liefern. connectivity-check.ubuntu.com antwortet mit "204 No
+# Content" (0 Bytes) – damit meldete der Installer IMMER "kein Internet",
+# auch bei funktionierender Verbindung (z. B. in VirtualBox). Daher mehrere
+# Adressen, die wirklich Daten liefern; die erste erreichbare genügt.
+NETCHECK="[ \"http://archive.ubuntu.com/ubuntu/dists/${UBUNTU_CODENAME}/Release.gpg\","
+NETCHECK+=" \"http://security.ubuntu.com/ubuntu/dists/${UBUNTU_CODENAME}-security/Release.gpg\","
+NETCHECK+=" \"http://detectportal.firefox.com/success.txt\" ]"
 sed -i -e 's|^showDonateUrl:.*|showDonateUrl: false|' \
-       -e 's|^\(\s*internetCheckUrl:\).*|\1 http://connectivity-check.ubuntu.com|' \
+       -e "s|^\(\s*internetCheckUrl:\).*|\1 ${NETCHECK}|" \
        "$CAL/modules/welcome.conf"
+grep -q 'internetCheckUrl:.*Release.gpg' "$CAL/modules/welcome.conf" \
+    || { echo "FEHLER: internetCheckUrl in welcome.conf nicht gesetzt" >&2; exit 1; }
 
 # --- Netzwerk: NetworkManager soll ALLE Netzwerkkarten verwalten -------------
 # Ubuntu lässt Kabel-Netzwerk sonst "unverwaltet" (nur WLAN/Mobilfunk aktiv);
