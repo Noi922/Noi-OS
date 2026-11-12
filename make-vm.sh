@@ -129,6 +129,7 @@ printf '#!/bin/sh\nexit 101\n' > /usr/sbin/policy-rc.d; chmod +x /usr/sbin/polic
 
 # Live-Werkzeuge entfernen (Calamares bleibt für den Assistenten)
 apt-get purge -y casper || true
+rm -f /usr/libexec/noios-installer-cleanup   # nur für die ISO-Installation
 rm -f /usr/share/initramfs-tools/scripts/casper-bottom/34noios_live_settings
 
 # --- OEM-Modus: temporärer Benutzer "oem" startet beim ersten Boot den

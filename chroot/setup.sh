@@ -178,9 +178,38 @@ sed -i "s/kubuntu_/${DISTRO_ID}_/g" "$CAL/modules/partition.conf"
 sed -i -e "s|^region:.*|region: \"${TIMEZONE%%/*}\"|" \
        -e "s|^zone:.*|zone: \"${TIMEZONE#*/}\"|" "$CAL/modules/locale.conf"
 sed -i "s/kubuntu-2404/${DISTRO_ID}-${DISTRO_VERSION//./}/" "$CAL/modules/oemid.conf"
-# Nach der Installation: Branding behalten, Installer-Pakete entfernen
-sed -i "s/      - calamares-settings-kubuntu/      - calamares-settings-kubuntu\n      - calamares-settings-ubuntu-common\n      - casper/" \
-    "$CAL/modules/packages.conf"
+# Nach der Installation: Installer-Pakete entfernen, Branding behalten.
+# Kubuntus packages.conf ruft dafür "apt-get remove ^live-* … cifs-utils
+# kubuntu-installer-prompt" auf. apt-get scheitert komplett (Fehlercode 100),
+# sobald EIN Name unbekannt ist – ohne frische Paketlisten (kein Internet,
+# Spiegelserver nicht erreichbar) also immer: "Installation gescheitert –
+# Fehler im Paketmanager". Daher entfernt ein eigenes, fehlertolerantes Skript
+# nur das, was wirklich installiert ist (shellprocess@noios_cleanup, s. u.);
+# der Calamares-Schritt "packages" holt nur noch fehlende Sprachpakete nach.
+install -D -m 755 "$B/calamares/noios-installer-cleanup" /usr/libexec/noios-installer-cleanup
+cat > "$CAL/modules/packages.conf" <<'EOF'
+---
+# Noi OS: nur Sprachpakete nachinstallieren ("try" = Fehler sind nicht schlimm).
+# Entfernt wird der Installer von /usr/libexec/noios-installer-cleanup.
+backend: apt
+update_db: false
+operations:
+  - try_install:
+      - language-pack-$LOCALE
+      - language-pack-kde-$LOCALE
+      - hunspell-$LOCALE
+      - libreoffice-help-$LOCALE
+      - libreoffice-l10n-$LOCALE
+EOF
+cat > "$CAL/modules/shellprocess_noios_cleanup.conf" <<'EOF'
+---
+# Noi OS: Installer aus dem installierten System entfernen ("-" = Fehler ignorieren)
+dontChroot: false
+timeout: 900
+script:
+    - command: "-/usr/libexec/noios-installer-cleanup"
+      timeout: 900
+EOF
 # Paketquellen-Schritt des Installers ("automirror") durch die robuste
 # Noi-Fassung ersetzen. Das Original bricht die ganze Installation ab
 # ("Main Skriptdatei … automirror/main.py … hat eine Ausnahme ausgelöst"),
@@ -206,12 +235,12 @@ script:
     - command: "-apt-get -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 -o Acquire::Retries=1 update"
       timeout: 300
 EOF
-sed -i 's/^update_db:.*/update_db: false/' "$CAL/modules/packages.conf"
 if ! grep -q 'noios_aptupdate' "$CAL/settings.conf"; then
-    sed -i -e 's/^instances:$/&\n- id: noios_aptupdate\n  module: shellprocess\n  config: shellprocess_noios_aptupdate.conf/' \
-           -e 's/^  - packages$/  - shellprocess@noios_aptupdate\n&/' "$CAL/settings.conf"
+    sed -i -e 's/^instances:$/&\n- id: noios_aptupdate\n  module: shellprocess\n  config: shellprocess_noios_aptupdate.conf\n- id: noios_cleanup\n  module: shellprocess\n  config: shellprocess_noios_cleanup.conf/' \
+           -e 's/^  - packages$/  - shellprocess@noios_aptupdate\n&\n  - shellprocess@noios_cleanup/' "$CAL/settings.conf"
 fi
 grep -q 'shellprocess@noios_aptupdate' "$CAL/settings.conf" \
+    && grep -q 'shellprocess@noios_cleanup' "$CAL/settings.conf" \
     || { echo "FEHLER: settings.conf von Calamares hat ein unerwartetes Format" >&2; exit 1; }
 # Starter auf dem Live-Desktop
 if [[ -f /usr/share/applications/kubuntu-calamares.desktop ]]; then

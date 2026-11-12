@@ -323,6 +323,11 @@ def main():
         # Installer-Fallen (führten zu "Installation gescheitert")
         code, out, _ = qga.run("test -f /etc/apt/sources.list && echo da")
         check("Installer: /etc/apt/sources.list vorhanden (automirror)", out == "da", out or "fehlt")
+        code, out, _ = qga.run("test -x /usr/libexec/noios-installer-cleanup "
+                               "&& grep -q 'shellprocess@noios_cleanup' /etc/calamares/settings.conf "
+                               "&& ! grep -q '^ *- remove' /etc/calamares/modules/packages.conf && echo ja")
+        check("Installer: fehlertolerantes Aufräumen statt 'apt-get remove'-Liste", out == "ja",
+              out or "fehlt")
         # Calamares zählt nur Adressen mit Inhalt als "online" (204/leer = "kein Internet")
         code, out, _ = qga.run("for u in $(grep internetCheckUrl /etc/calamares/modules/welcome.conf "
                                "| grep -o 'http[^\" ,]*'); do curl -fsS -m 15 \"$u\" | wc -c; done "
