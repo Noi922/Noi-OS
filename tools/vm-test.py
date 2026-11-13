@@ -366,6 +366,11 @@ def main():
         check("Shell hamster installiert und Standard für neue Benutzer",
               out.startswith("hamster") and out.split("\n")[1:] == ["1", "1"], out.replace("\n", " / "),
               required=False)
+        code, out, _ = qga.run("python --version 2>&1; pip --version 2>&1 | cut -d' ' -f1; pipx --version >/dev/null 2>&1 && echo pipx; "
+                               "python -m venv /tmp/noi-venv >/dev/null 2>&1 && echo venv; git --version | cut -d' ' -f1")
+        check("Python startklar (python, pip, pipx, venv) und git",
+              out.startswith("Python 3") and out.split("\n")[1:] == ["pip", "pipx", "venv", "git"],
+              out.replace("\n", " / "), required=False)
         code, out, _ = qga.run("noi doktor 2>&1 | grep -c '✔'")
         check("noi doktor läuft", out.isdigit() and int(out) >= 3, f"{out} Prüfungen ok", required=False)
         code, out, _ = qga.run("systemctl is-enabled noios-flatpak-update.timer")

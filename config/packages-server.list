@@ -63,6 +63,14 @@ slirp4netns
 passt
 catatonit
 
+# --- Programmieren: Python startklar (weitere Sprachen: noi dev) --------------
+python3-pip
+python3-venv
+python3-dev
+pipx
+python-is-python3
+build-essential
+
 # --- Werkzeuge für den Alltag ------------------------------------------------
 htop
 tmux

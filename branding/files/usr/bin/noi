@@ -10,6 +10,7 @@
 #   noi port        Port in der Firewall freigeben/schließen: auf | zu | liste
 #   noi shell       Standard-Shell wechseln: hamster | bash
 #   noi paket       App-Pakete installieren: gaming | kreativ | medien | …
+#   noi dev         Programmiersprachen nachinstallieren: python | node | c | …
 #   noi bericht     Systembericht für Fehlermeldungen in eine Datei schreiben
 #   noi thema       Farbschema wechseln: hell | dunkel
 #   noi hintergrund Camo-Hintergrundbild wechseln: wald | wueste | nacht | winter
@@ -526,6 +527,67 @@ cmd_paket() {
     ok "${B}Fertig!${R} Die Programme stehen im Startmenü."
 }
 
+# --- noi dev: Programmiersprachen und Werkzeuge nachinstallieren ----------------
+dev_pakete() {
+    case "$1" in
+        python) echo "python3-pip python3-venv python3-dev pipx python-is-python3" ;;
+        node)   echo "nodejs npm" ;;
+        c)      echo "build-essential gdb cmake pkg-config" ;;
+        java)   echo "default-jdk maven" ;;
+        go)     echo "golang-go" ;;
+        rust)   echo "rustc cargo" ;;
+        php)    echo "php-cli composer" ;;
+        *) return 1 ;;
+    esac
+}
+dev_text() {
+    case "$1" in
+        python) echo "Python 3 mit pip, venv und pipx" ;;
+        node)   echo "Node.js und npm (JavaScript)" ;;
+        c)      echo "C/C++: gcc, g++, make, gdb, cmake" ;;
+        java)   echo "Java (OpenJDK) und Maven" ;;
+        go)     echo "Go" ;;
+        rust)   echo "Rust mit cargo" ;;
+        php)    echo "PHP (Kommandozeile) und Composer" ;;
+    esac
+}
+dev_pruefbefehl() {
+    case "$1" in
+        python) echo pip3 ;; node) echo npm ;; c) echo cmake ;; java) echo javac ;;
+        go) echo go ;; rust) echo cargo ;; php) echo composer ;;
+    esac
+}
+DEV_SPRACHEN="python node c java go rust php"
+
+cmd_dev() {
+    local s=${1:-} p
+    if [[ -z $s || $s == liste ]]; then
+        titel "Programmiersprachen"
+        for p in $DEV_SPRACHEN; do
+            if command -v "$(dev_pruefbefehl "$p")" >/dev/null 2>&1; then
+                printf '  %s✔%s %s%-7s%s %s\n' "$G" "$R" "$B" "$p" "$R" "$(dev_text "$p")"
+            else
+                printf '  %s·%s %s%-7s%s %s\n' "$L" "$R" "$B" "$p" "$R" "$(dev_text "$p")"
+            fi
+        done
+        echo; hinweis "✔ = installiert.  Nachinstallieren:  noi dev node"
+        hinweis "Python-Projekt anlegen:  python -m venv .venv && source .venv/bin/activate"
+        hinweis "Python-Programme installieren:  pipx install <name>"; echo
+        return 0
+    fi
+    if ! dev_pakete "$s" >/dev/null; then
+        fehler "Unbekannte Sprache: $s"; hinweis "Verfügbar: $DEV_SPRACHEN"; return 1
+    fi
+    titel "$(dev_text "$s") installieren"
+    # shellcheck disable=SC2046 # Paketliste absichtlich in Wörter zerlegen
+    if als_root apt-get update -qq && als_root env DEBIAN_FRONTEND=noninteractive \
+            apt-get install -y $(dev_pakete "$s"); then
+        ok "${B}Fertig:${R} $(dev_text "$s")"
+    else
+        fehler "Installation fehlgeschlagen – Internetverbindung prüfen (noi netz)"; return 1
+    fi
+}
+
 # --- noi bericht: alles Wichtige für eine Fehlermeldung in eine Datei -----------
 cmd_bericht() {
     local datei="${1:-$HOME/noi-bericht-$(date +%Y%m%d-%H%M).txt}"
@@ -622,6 +684,7 @@ cmd_hilfe() {
   ${B}noi port${R}         Firewall: noi port auf 8080 | zu 8080 | liste
   ${B}noi shell${R}        Standard-Shell wechseln: hamster | bash
   ${B}noi paket${R}        App-Pakete: gaming | kreativ | medien | kommunikation | entwicklung
+  ${B}noi dev${R}          Programmiersprachen: python | node | c | java | go | rust | php
   ${B}noi bericht${R}      Systembericht für Fehlermeldungen speichern
   ${B}noi thema${R}        Farbschema wechseln: hell | dunkel
   ${B}noi hintergrund${R}  Hintergrundbild: wald | wueste | nacht | winter
@@ -650,6 +713,7 @@ case "${1:-hilfe}" in
     port|firewall)        cmd_port "${2:-}" "${3:-}" ;;
     shell)                cmd_shell "${2:-}" ;;
     paket|pakete|bundle)  cmd_paket "${2:-}" ;;
+    dev|sprache)          cmd_dev "${2:-}" ;;
     bericht|report)       cmd_bericht "${2:-}" ;;
     thema|theme)          cmd_thema "${2:-}" ;;
     hintergrund|wallpaper) cmd_hintergrund "${2:-}" ;;

@@ -191,6 +191,9 @@ boot_and_check() {   # $1 = Name, Rest = zusätzliche QEMU-Optionen
     out=$(ssh_run 'docker info --format "{{.ServerVersion}}" 2>&1; docker compose version --short 2>&1' | tr '\n' ' ')
     check "Docker läuft (ohne sudo), Compose vorhanden" \
         "$([[ $out =~ ^[0-9]+\.[0-9.]+.*\ v?[0-9]+\.[0-9] ]] && echo 0 || echo 1)" "$out"
+    out=$(ssh_run 'python --version; pip --version | cut -d" " -f1-2; pipx --version; cd /tmp && python -m venv t && t/bin/python -c "print(\"venv-ok\")"; git --version | cut -d" " -f1; gcc --version | head -1 | cut -d" " -f1' 2>&1 | tr '\n' ' ')
+    check "Python startklar (python, pip, pipx, venv), git, gcc" \
+        "$([[ $out == Python\ 3*pip\ *venv-ok\ git\ gcc* ]] && echo 0 || echo 1)" "$out"
     out=$(ssh_run 'podman --version' 2>&1)
     check "Podman vorhanden" "$([[ $out == podman* ]] && echo 0 || echo 1)" "$out" optional
     out=$(ssh_run 'systemctl --failed --no-legend --plain | awk "{print \$1}" | tr "\n" " "' 2>&1)

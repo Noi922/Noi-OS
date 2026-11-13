@@ -27,6 +27,7 @@ Sicherheitsupdates bis 2029.
 | Shell | **[hamster](https://github.com/Noi922/Linux-plugin)** als Standard-Shell: erklärt Fehler, vervollständigt Befehle, läuft auf echter bash (zurück: `noi shell bash`; abschaltbar in `config.sh`) |
 | Eigene Apps | **Noi-Zentrale** (Auslastung, Pflege, Aussehen, App-Pakete und App-Empfehlungen), **Noi-Notizen** (speichert von selbst), **Noi-Aufgaben** (Aufgabenliste), **Noi-Passwort** (Passwörter und Passphrasen erzeugen), **Noi-Fokus** (Pomodoro-Timer) |
 | App-Pakete | `noi paket gaming` (Steam, Lutris, Heroic), `kreativ`, `medien`, `kommunikation`, `entwicklung` – oder per Klick in der Noi-Zentrale |
+| Programmieren | **Python** startklar (`python`, `pip`, `venv`, `pipx`), `git`, Compiler; weitere Sprachen mit `noi dev node` (auch `c`, `java`, `go`, `rust`, `php`) |
 | Komfort | Nachtlicht ab 20 Uhr, GameMode für Spiele, Firefox mit uBlock Origin und ohne Telemetrie |
 | Anzeige | passt sich automatisch an: Skalierung nach Pixeldichte (100–250 %, wie Windows), in VMs wächst die Auflösung mit dem Fenster |
 | VM-Unterstützung | Gastwerkzeuge für VirtualBox, VMware, KVM/Proxmox und Hyper-V |
@@ -45,6 +46,7 @@ Dieselbe Basis, aber schlank für Heimserver, VMs und Mini-PCs:
 | Sicherheit | Firewall (nur SSH und Cockpit offen), automatische Sicherheitsupdates, Secure Boot |
 | Container | **Docker** mit Compose und Buildx (der angelegte Benutzer darf `docker` ohne sudo), dazu Podman |
 | Werkzeug | `noi update`, `noi doktor`, `noi netz`, `noi status`, `noi port auf\|zu 8080`, `noi bericht`, `noi info`, `noi aufraeumen` |
+| Programmieren | **Python** startklar (`python`, `pip`, `venv`, `pipx`), `git`, gcc/make; weitere Sprachen mit `noi dev node` (auch `java`, `go`, `rust`, `php`) |
 | Shell | **hamster** als Standard-Shell des angelegten Benutzers (Skripte, `ssh host befehl`, scp laufen weiter über bash) |
 | Netzwerk | DHCP auf allen Kabel-Netzwerkkarten (`/etc/netplan/01-noios-dhcp.yaml` für feste IP) |
 
