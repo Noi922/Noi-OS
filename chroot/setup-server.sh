@@ -186,9 +186,25 @@ systemctl mask systemd-networkd-wait-online.service >/dev/null 2>&1 || true
 # --- SSH ---------------------------------------------------------------------
 log "SSH einrichten"
 # Jede Installation bekommt eigene Host-Schlüssel (nicht die aus dem Abbild)
+# – sie entstehen unmittelbar vor dem Start des SSH-Dienstes, falls sie fehlen.
+# (Bewusst als Ergänzung von ssh.service und NICHT als eigener Dienst "vor
+# ssh.socket": Das ergab einen Reihenfolge-Zirkel mit sockets.target, systemd
+# strich daraufhin den SSH-Socket und der Server war per SSH nicht erreichbar.)
 rm -f /etc/ssh/ssh_host_*
-install -m 644 "$B/server/noios-ssh-hostkeys.service" /etc/systemd/system/noios-ssh-hostkeys.service
-systemctl enable noios-ssh-hostkeys.service >/dev/null
+install -d /etc/systemd/system/ssh.service.d
+cat > /etc/systemd/system/ssh.service.d/10-noios-hostkeys.conf <<'EOF'
+# Noi OS Server: fehlende Host-Schlüssel vor dem Start erzeugen
+[Service]
+ExecStartPre=
+ExecStartPre=/usr/bin/ssh-keygen -A
+ExecStartPre=/usr/sbin/sshd -t
+EOF
+systemctl enable ssh.socket >/dev/null 2>&1 || systemctl enable ssh.service >/dev/null 2>&1 || true
+# Sicherheitsnetz: der Build bricht ab, wenn die Start-Reihenfolge einen Zirkel hat
+if systemd-analyze verify default.target 2>&1 | grep -i "ordering cycle"; then
+    echo "FEHLER: Reihenfolge-Zirkel in den systemd-Units (siehe oben)" >&2
+    exit 1
+fi
 cat > /etc/ssh/sshd_config.d/10-noios.conf <<'EOF'
 # Noi OS Server: root darf sich nicht per SSH anmelden (Benutzer + sudo nehmen)
 PermitRootLogin no
