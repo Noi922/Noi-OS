@@ -42,9 +42,12 @@ jobs:
         run: |
           # Fällt hier etwas auf, sparen wir uns den einstündigen Build
           python3 tests/test_automirror.py
-          bash -n build.sh chroot/setup.sh make-vm.sh branding/build-deb.sh branding/files/usr/bin/noi
+          # (bash -n prüft nur die erste Datei – daher einzeln)
+          for f in build.sh chroot/setup.sh make-vm.sh branding/build-deb.sh \
+                   branding/files/usr/bin/noi chroot/install-hamster.sh; do
+            bash -n "$f"
+          done
           sh -n chroot/calamares/noios-installer-cleanup
-          bash -n chroot/install-hamster.sh
           python3 -m py_compile branding/files/usr/bin/noi-zentrale \
               branding/files/usr/bin/noi-notizen branding/files/usr/bin/noi-fokus \
               branding/files/usr/bin/noios-autoscale chroot/calamares/automirror.py

@@ -28,8 +28,11 @@ jobs:
 
       - name: Schnelltests (Skript-Syntax)
         run: |
-          bash -n build.sh chroot/setup-server.sh server/noi-server-install \
-                  tools/server-test.sh branding/files/usr/bin/noi chroot/install-hamster.sh
+          # (bash -n prüft nur die erste Datei – daher einzeln)
+          for f in build.sh chroot/setup-server.sh server/noi-server-install \
+                   tools/server-test.sh branding/files/usr/bin/noi chroot/install-hamster.sh; do
+            bash -n "$f"
+          done
           sh -n server/motd
 
       - name: Build-Verzeichnis wählen
