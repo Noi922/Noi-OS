@@ -37,4 +37,34 @@ QMessageBox.question = staticmethod(lambda *a, **k: QMessageBox.Yes)
 w.delete_note(); assert os.listdir(d) == ["Umbenannt.txt"], os.listdir(d)
 assert open(d+"/Umbenannt.txt").read() == "Umbenannt\nx"
 w.new_note(); w.close(); assert os.listdir(d) == ["Umbenannt.txt"], os.listdir(d)
+# Aufgaben
+import json
+df = os.path.join(tempfile.mkdtemp(), "a.json"); os.environ["NOI_AUFGABEN_DATEI"] = df
+au = load("noi-aufgaben"); L = au.Liste(df)
+assert not L.add("   ") and L.add("  Milch   kaufen ") and L.add("Steuer")
+assert [i["text"] for i in L.sorted()] == ["Steuer", "Milch kaufen"]
+L.toggle(L.items[1], True)
+assert [i["text"] for i in L.sorted()] == ["Milch kaufen", "Steuer"] and L.open_count() == 1
+assert [i["text"] for i in au.Liste(df).sorted()] == ["Milch kaufen", "Steuer"]   # gespeichert
+assert L.clear_done() == 1 and json.load(open(df))[0]["text"] == "Milch kaufen"
+open(df, "w").write("{kaputt")                       # beschädigte Datei: nicht abstürzen
+L2 = au.Liste(df); assert L2.items == [] and os.path.exists(df + ".defekt") and L2.error
+w = au.Aufgaben(); w.entry.setText("Test"); w.add(); assert w.view.count() == 1
+from PyQt5.QtCore import Qt
+w.view.item(0).setCheckState(Qt.Checked); assert w.liste.open_count() == 0
+w.clear_done(); assert w.view.count() == 0
+# Passwort
+pw = load("noi-passwort")
+for n in (4, 8, 20, 64):
+    t, bits = pw.erzeugen(n)
+    assert len(t) == max(n, 4) and bits > 20
+    assert any(c in pw.KLEIN for c in t) and any(c in pw.GROSS for c in t)
+    assert any(c in pw.ZIFFERN for c in t) and any(c in pw.SONDER for c in t)
+t, _ = pw.erzeugen(40, sonder=False, eindeutig=True)
+assert not any(c in pw.SONDER + pw.VERWECHSELBAR for c in t)
+try: pw.erzeugen(10, False, False, False, False); raise SystemExit("kein Fehler")
+except ValueError: pass
+assert len({pw.erzeugen(20)[0] for _ in range(50)}) == 50
+t, bits = pw.passphrase(5); assert len(t.split("-")) == 6 and bits > 30
+assert len(set(pw.WOERTER)) == len(pw.WOERTER) and all(x.isascii() and x.islower() for x in pw.WOERTER)
 print("ALLE APP-TESTS OK")

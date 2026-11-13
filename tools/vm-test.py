@@ -356,10 +356,10 @@ def main():
         code, out, _ = qga.run("for a in keepassxc filelight elisa kolourpaint gimp kamoso kpat kmines ksudoku; do "
                                "dpkg-query -W -f='${Status}' $a 2>/dev/null | grep -q 'ok installed' || echo $a; done")
         check("Apps installiert (KeePassXC, GIMP, …)", out == "", "alle da" if not out else "fehlt: " + out.replace("\n", " "))
-        code, out, _ = qga.run("for a in noi-zentrale noi-notizen noi-fokus; do "
+        code, out, _ = qga.run("for a in noi-zentrale noi-notizen noi-fokus noi-aufgaben noi-passwort; do "
                                "test -x /usr/bin/$a && python3 -m py_compile /usr/bin/$a || echo $a; done; "
                                "python3 -c 'import PyQt5.QtWidgets' 2>/dev/null || echo PyQt5")
-        check("Noi-Apps (Zentrale, Notizen, Fokus) startbereit", out == "",
+        check("Noi-Apps (Zentrale, Notizen, Aufgaben, Passwort, Fokus) startbereit", out == "",
               "alle da" if not out else "fehlt: " + out.replace("\n", " "), required=False)
         code, out, _ = qga.run("hamster --version 2>&1 | head -1; grep -c '^DSHELL=/usr/bin/hamster' /etc/adduser.conf; "
                                "grep -c 'shell: */usr/bin/hamster' /etc/calamares/modules/users.conf")

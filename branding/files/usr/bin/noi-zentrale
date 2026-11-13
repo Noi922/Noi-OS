@@ -23,6 +23,15 @@ except ImportError:
 WALLPAPERS = [("wald", "Wald", "NoiCamo"), ("wueste", "Wüste", "NoiCamoWueste"),
               ("nacht", "Nacht", "NoiCamoNacht"), ("winter", "Winter", "NoiCamoWinter")]
 
+# App-Pakete: (Name für "noi paket", Titel, Inhalt, Symbolname)
+PAKETE = [
+    ("gaming", "Gaming", "Steam, Lutris, Heroic", "applications-games"),
+    ("kreativ", "Kreativ", "Krita, Inkscape, Kdenlive, Audacity", "applications-graphics"),
+    ("medien", "Medien", "Spotify, OBS Studio, Haruna", "applications-multimedia"),
+    ("kommunikation", "Kommunikation", "Thunderbird, Signal, Discord", "applications-internet"),
+    ("entwicklung", "Entwicklung", "VSCodium, GitHub Desktop", "applications-development"),
+]
+
 # (Name, Beschreibung, Flathub-ID, Symbolname)
 APPS = [
     ("Steam", "Spiele-Plattform", "com.valvesoftware.Steam", "steam"),
@@ -238,10 +247,10 @@ class Zentrale(QWidget):
         self.proc = None
         return w
 
-    def term(self, sub):
+    def term(self, *args):
         if not shutil.which("noi"):
             QMessageBox.warning(self, "Noi-Zentrale", "Das Werkzeug „noi“ wurde nicht gefunden.")
-        elif not in_terminal("noi", sub):
+        elif not in_terminal("noi", *args):
             QMessageBox.warning(self, "Noi-Zentrale", "Kein Terminal-Programm gefunden.")
 
     def run_noi(self, sub):
@@ -285,6 +294,17 @@ class Zentrale(QWidget):
             b.clicked.connect(lambda _=False, a=arg: self.noi("hintergrund", a))
             row.addWidget(b)
         lay.addLayout(row)
+        if os.path.exists("/usr/bin/hamster"):
+            lay.addWidget(QLabel("<h3>Shell im Terminal</h3>"))
+            row = QHBoxLayout()
+            for text, arg, icon in [("hamster (erklärt Fehler, vervollständigt)", "hamster",
+                                     "utilities-terminal"),
+                                    ("bash (klassisch)", "bash", "utilities-terminal")]:
+                b = QPushButton(QIcon.fromTheme(icon), text)
+                b.setMinimumHeight(40)
+                b.clicked.connect(lambda _=False, a=arg: self.term("shell", a))
+                row.addWidget(b)
+            lay.addLayout(row)
         self.look_status = QLabel()
         lay.addWidget(self.look_status)
         lay.addStretch(1)
@@ -311,10 +331,20 @@ class Zentrale(QWidget):
     def _tab_apps(self):
         inner = QWidget()
         grid = QGridLayout(inner)
-        info = QLabel("Beliebte Programme von Flathub. Ein Klick öffnet die Seite der App in "
+        grid.addWidget(QLabel("<h3>App-Pakete – mehrere Programme mit einem Klick</h3>"), 0, 0, 1, 3)
+        pakete = QHBoxLayout()
+        for name, titel, inhalt, icon in PAKETE:
+            b = QPushButton(QIcon.fromTheme(icon), titel)
+            b.setToolTip(f"Installiert: {inhalt}")
+            b.setMinimumHeight(38)
+            b.clicked.connect(lambda _=False, n=name, t=titel, c=inhalt: self.paket(n, t, c))
+            pakete.addWidget(b)
+        grid.addLayout(pakete, 1, 0, 1, 3)
+        grid.addWidget(QLabel("<h3>Einzelne Programme</h3>"), 2, 0, 1, 3)
+        info = QLabel("Ein Klick öffnet die Seite der App in "
                       "<b>Discover</b> – dort auf „Installieren“ klicken.")
         info.setWordWrap(True)
-        grid.addWidget(info, 0, 0, 1, 3)
+        grid.addWidget(info, 3, 0, 1, 3)
         for i, (name, desc, app_id, icon) in enumerate(APPS):
             b = QToolButton()
             b.setToolButtonStyle(Qt.ToolButtonTextUnderIcon)
@@ -324,13 +354,21 @@ class Zentrale(QWidget):
             b.setMinimumSize(200, 110)
             b.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
             b.clicked.connect(lambda _=False, a=app_id: self.open_app(a))
-            grid.addWidget(b, 1 + i // 3, i % 3)
-        grid.setRowStretch(2 + len(APPS) // 3, 1)
+            grid.addWidget(b, 4 + i // 3, i % 3)
+        grid.setRowStretch(5 + len(APPS) // 3, 1)
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.NoFrame)
         scroll.setWidget(inner)
         return scroll
+
+    def paket(self, name, titel, inhalt):
+        if QMessageBox.question(
+                self, "Noi-Zentrale",
+                f"Paket „{titel}“ installieren?\n\n{inhalt}\n\n"
+                "Die Programme werden aus Flathub geladen – das kann einige Minuten dauern.") \
+                == QMessageBox.Yes:
+            self.term("paket", name)
 
     def open_app(self, app_id):
         if shutil.which("plasma-discover"):

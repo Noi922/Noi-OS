@@ -25,7 +25,8 @@ Sicherheitsupdates bis 2029.
 | System | zram (schneller Auslagerungsspeicher), Timeshift für Sicherungen, Willkommens-Assistent |
 | `noi`-Werkzeug | `noi update` (System + Flatpak + Firmware + hamster), `noi info`, `noi aufraeumen`, `noi sicherung`, `noi doktor` (System-Check), `noi netz` (Internet-Diagnose), `noi status` (Dienste, offene Ports), `noi port auf\|zu 8080` (Firewall), `noi shell hamster\|bash`, `noi bericht` (Systembericht für Fehlermeldungen), `noi thema hell\|dunkel`, `noi hintergrund wald\|wueste\|nacht\|winter` – auch im Startmenü, mit Tab-Vervollständigung; Flatpak-Apps aktualisieren sich wöchentlich automatisch |
 | Shell | **[hamster](https://github.com/Noi922/Linux-plugin)** als Standard-Shell: erklärt Fehler, vervollständigt Befehle, läuft auf echter bash (zurück: `noi shell bash`; abschaltbar in `config.sh`) |
-| Eigene Apps | **Noi-Zentrale** (Auslastung, Pflege, Aussehen, App-Empfehlungen), **Noi-Notizen** (speichert von selbst), **Noi-Fokus** (Pomodoro-Timer) |
+| Eigene Apps | **Noi-Zentrale** (Auslastung, Pflege, Aussehen, App-Pakete und App-Empfehlungen), **Noi-Notizen** (speichert von selbst), **Noi-Aufgaben** (Aufgabenliste), **Noi-Passwort** (Passwörter und Passphrasen erzeugen), **Noi-Fokus** (Pomodoro-Timer) |
+| App-Pakete | `noi paket gaming` (Steam, Lutris, Heroic), `kreativ`, `medien`, `kommunikation`, `entwicklung` – oder per Klick in der Noi-Zentrale |
 | Komfort | Nachtlicht ab 20 Uhr, GameMode für Spiele, Firefox mit uBlock Origin und ohne Telemetrie |
 | Anzeige | passt sich automatisch an: Skalierung nach Pixeldichte (100–250 %, wie Windows), in VMs wächst die Auflösung mit dem Fenster |
 | VM-Unterstützung | Gastwerkzeuge für VirtualBox, VMware, KVM/Proxmox und Hyper-V |
@@ -42,10 +43,14 @@ Dieselbe Basis, aber schlank für Heimserver, VMs und Mini-PCs:
 | Fernzugriff | SSH (root-Anmeldung gesperrt), fail2ban sperrt Angreifer nach Fehlversuchen aus |
 | Web-Verwaltung | **Cockpit** unter `https://IP-Adresse:9090`: Auslastung, Dienste, Updates, Speicher, Container |
 | Sicherheit | Firewall (nur SSH und Cockpit offen), automatische Sicherheitsupdates, Secure Boot |
-| Container | Podman (Docker-kompatibel) |
+| Container | **Docker** mit Compose und Buildx (der angelegte Benutzer darf `docker` ohne sudo), dazu Podman |
 | Werkzeug | `noi update`, `noi doktor`, `noi netz`, `noi status`, `noi port auf\|zu 8080`, `noi bericht`, `noi info`, `noi aufraeumen` |
 | Shell | **hamster** als Standard-Shell des angelegten Benutzers (Skripte, `ssh host befehl`, scp laufen weiter über bash) |
 | Netzwerk | DHCP auf allen Kabel-Netzwerkkarten (`/etc/netplan/01-noios-dhcp.yaml` für feste IP) |
+
+> **Docker und die Firewall:** Ports, die ein Container mit `-p 8080:80` veröffentlicht,
+> sind von außen erreichbar, auch ohne `noi port auf` – Docker trägt seine Regeln an
+> der Firewall vorbei ein. Nur lokal erreichbar: `-p 127.0.0.1:8080:80`.
 
 **Herunterladen:** *Actions* → **„Noi OS Server bauen“** → *Run workflow*; die ISO
 erscheint danach unter *Releases* (als Vorab-Version markiert).

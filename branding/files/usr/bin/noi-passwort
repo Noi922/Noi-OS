@@ -1,0 +1,219 @@
+#!/usr/bin/env python3
+"""Noi-Passwort – sichere Passwörter und Passphrasen erzeugen.
+
+Erzeugt Passwörter mit dem kryptografischen Zufallsgenerator des Systems
+(Python-Modul "secrets"). Nichts wird gespeichert oder übertragen.
+Zum Aufbewahren: KeePassXC (ist vorinstalliert).
+
+  noi-passwort            Fenster öffnen
+  noi-passwort --text 24  ein Passwort mit 24 Zeichen ausgeben (ohne Fenster)
+"""
+import math
+import secrets
+import string
+import sys
+
+KLEIN = string.ascii_lowercase
+GROSS = string.ascii_uppercase
+ZIFFERN = string.digits
+SONDER = "!#$%&*+-=?@_"
+VERWECHSELBAR = "0O1lI|"
+
+# Kurze, gut tippbare deutsche Wörter für Passphrasen (ohne Umlaute)
+WOERTER = """apfel birne wolke regen sonne mond stern wald wiese fluss berg tal see meer insel
+hafen boot segel anker kiste koffer lampe kerze tisch stuhl fenster garten zaun tor turm
+burg mauer stein sand lehm gras moos laub ast zweig wurzel blatt blume rose tulpe nelke
+hund katze maus igel fuchs dachs hase reh hirsch adler falke eule meise spatz taube ente
+gans huhn pferd esel ziege schaf rind wolf luchs otter biber robbe wal hai lachs forelle
+brot milch honig salz pfeffer zimt nuss mandel traube kirsche pflaume beere kuchen suppe
+hammer zange nagel schraube bohrer feile pinsel farbe papier stift heft buch seite karte
+kompass uhr glocke trommel geige floete harfe lied tanz spiel wuerfel ball netz reifen
+winter herbst sommer morgen abend nacht nebel frost eis schnee donner blitz wind sturm
+feuer funke glut rauch asche kohle eisen kupfer silber gold glas seide wolle leinen faden
+bruecke gasse platz markt laden keller dach kamin ofen herd topf pfanne loeffel gabel
+freund nachbar gast reise weg pfad ziel start mut ruhe kraft glueck traum plan idee""".split()
+
+
+def erzeugen(laenge=20, klein=True, gross=True, ziffern=True, sonder=True, eindeutig=False):
+    """Passwort mit mindestens einem Zeichen aus jeder gewählten Gruppe."""
+    gruppen = [g for g, an in ((KLEIN, klein), (GROSS, gross), (ZIFFERN, ziffern),
+                               (SONDER, sonder)) if an]
+    if not gruppen:
+        raise ValueError("Mindestens eine Zeichengruppe auswählen")
+    if eindeutig:
+        gruppen = ["".join(c for c in g if c not in VERWECHSELBAR) for g in gruppen]
+    laenge = max(int(laenge), len(gruppen))
+    alle = "".join(gruppen)
+    zeichen = [secrets.choice(g) for g in gruppen]
+    zeichen += [secrets.choice(alle) for _ in range(laenge - len(zeichen))]
+    # mischen (Fisher-Yates mit secrets), damit die Pflichtzeichen nicht vorn stehen
+    for i in range(len(zeichen) - 1, 0, -1):
+        j = secrets.randbelow(i + 1)
+        zeichen[i], zeichen[j] = zeichen[j], zeichen[i]
+    return "".join(zeichen), len(zeichen) * math.log2(len(set(alle)))
+
+
+def passphrase(anzahl=5, trenner="-"):
+    """Mehrere zufällige Wörter – leicht zu merken, schwer zu erraten."""
+    anzahl = max(int(anzahl), 2)
+    worte = [secrets.choice(WOERTER) for _ in range(anzahl)]
+    i = secrets.randbelow(anzahl)
+    worte[i] = worte[i].capitalize()
+    text = trenner.join(worte) + trenner + str(secrets.randbelow(90) + 10)
+    bits = anzahl * math.log2(len(set(WOERTER))) + math.log2(anzahl) + math.log2(90)
+    return text, bits
+
+
+def staerke(bits):
+    if bits < 50:
+        return "schwach", 25
+    if bits < 75:
+        return "in Ordnung", 55
+    if bits < 100:
+        return "stark", 80
+    return "sehr stark", 100
+
+
+def main_text(argv):
+    try:
+        n = int(argv[0]) if argv else 20
+    except ValueError:
+        sys.stderr.write("Aufruf: noi-passwort --text [LÄNGE]\n")
+        return 1
+    print(erzeugen(n)[0])
+    return 0
+
+
+def main_gui():
+    try:
+        from PyQt5.QtCore import Qt, QTimer
+        from PyQt5.QtGui import QFont, QIcon
+        from PyQt5.QtWidgets import (QApplication, QCheckBox, QGridLayout, QHBoxLayout,
+                                     QLabel, QLineEdit, QProgressBar, QPushButton,
+                                     QSlider, QTabWidget, QVBoxLayout, QWidget)
+    except ImportError:
+        sys.stderr.write("Noi-Passwort braucht PyQt5:  sudo apt install python3-pyqt5\n"
+                         "Ohne Fenster:  noi-passwort --text 24\n")
+        return 1
+
+    class Fenster(QWidget):
+        def __init__(self):
+            super().__init__()
+            self.setWindowTitle("Noi-Passwort")
+            self.setWindowIcon(QIcon.fromTheme("dialog-password", QIcon.fromTheme("password")))
+            self.resize(520, 330)
+
+            self.feld = QLineEdit()
+            self.feld.setReadOnly(True)
+            f = QFont("monospace")
+            f.setPointSize(13)
+            self.feld.setFont(f)
+            neu = QPushButton(QIcon.fromTheme("view-refresh"), "")
+            neu.setToolTip("Neu erzeugen")
+            neu.clicked.connect(self.neu)
+            self.kopieren = QPushButton(QIcon.fromTheme("edit-copy"), "Kopieren")
+            self.kopieren.clicked.connect(self.kopiere)
+            oben = QHBoxLayout()
+            oben.addWidget(self.feld, 1)
+            oben.addWidget(neu)
+            oben.addWidget(self.kopieren)
+
+            self.balken = QProgressBar()
+            self.balken.setRange(0, 100)
+            self.balken.setTextVisible(False)
+            self.balken.setMaximumHeight(8)
+            self.info = QLabel()
+
+            # --- Passwort
+            pw = QWidget()
+            g = QGridLayout(pw)
+            self.laenge = QSlider(Qt.Horizontal)
+            self.laenge.setRange(8, 64)
+            self.laenge.setValue(20)
+            self.laenge_text = QLabel()
+            g.addWidget(QLabel("Länge"), 0, 0)
+            g.addWidget(self.laenge, 0, 1)
+            g.addWidget(self.laenge_text, 0, 2)
+            self.boxen = {}
+            for i, (key, text, an) in enumerate([
+                    ("klein", "Kleinbuchstaben (a–z)", True), ("gross", "Großbuchstaben (A–Z)", True),
+                    ("ziffern", "Ziffern (0–9)", True), ("sonder", f"Sonderzeichen ({SONDER})", True),
+                    ("eindeutig", "Verwechselbare Zeichen weglassen (0 O 1 l I)", False)]):
+                b = QCheckBox(text)
+                b.setChecked(an)
+                b.stateChanged.connect(self.neu)
+                g.addWidget(b, 1 + i, 0, 1, 3)
+                self.boxen[key] = b
+            self.laenge.valueChanged.connect(self.neu)
+
+            # --- Passphrase
+            ph = QWidget()
+            g2 = QGridLayout(ph)
+            self.worte = QSlider(Qt.Horizontal)
+            self.worte.setRange(3, 8)
+            self.worte.setValue(5)
+            self.worte_text = QLabel()
+            g2.addWidget(QLabel("Wörter"), 0, 0)
+            g2.addWidget(self.worte, 0, 1)
+            g2.addWidget(self.worte_text, 0, 2)
+            hinweis = QLabel("Mehrere zufällige Wörter sind leicht zu merken und trotzdem "
+                             "sicher – gut für das Hauptpasswort von KeePassXC.")
+            hinweis.setWordWrap(True)
+            g2.addWidget(hinweis, 1, 0, 1, 3)
+            g2.setRowStretch(2, 1)
+            self.worte.valueChanged.connect(self.neu)
+
+            self.tabs = QTabWidget()
+            self.tabs.addTab(pw, "Passwort")
+            self.tabs.addTab(ph, "Passphrase")
+            self.tabs.currentChanged.connect(self.neu)
+
+            lay = QVBoxLayout(self)
+            lay.addLayout(oben)
+            lay.addWidget(self.balken)
+            lay.addWidget(self.info)
+            lay.addWidget(self.tabs, 1)
+            self.neu()
+
+        def neu(self, *_):
+            self.laenge_text.setText(f"{self.laenge.value()} Zeichen")
+            self.worte_text.setText(f"{self.worte.value()} Wörter")
+            try:
+                if self.tabs.currentIndex() == 1:
+                    text, bits = passphrase(self.worte.value())
+                else:
+                    text, bits = erzeugen(self.laenge.value(),
+                                          **{k: b.isChecked() for k, b in self.boxen.items()})
+            except ValueError as e:
+                self.feld.setText("")
+                self.balken.setValue(0)
+                self.info.setText(str(e))
+                return
+            name, wert = staerke(bits)
+            self.feld.setText(text)
+            self.balken.setValue(wert)
+            self.info.setText(f"Stärke: {name} (ca. {bits:.0f} Bit)")
+
+        def kopiere(self):
+            if not self.feld.text():
+                return
+            QApplication.clipboard().setText(self.feld.text())
+            self.kopieren.setText("Kopiert ✔")
+            QTimer.singleShot(1500, lambda: self.kopieren.setText("Kopieren"))
+
+    app = QApplication(sys.argv)
+    app.setApplicationName("noi-passwort")
+    app.setApplicationDisplayName("Noi-Passwort")
+    app.setDesktopFileName("noi-passwort")
+    win = Fenster()
+    win.show()
+    return app.exec_()
+
+
+if __name__ == "__main__":
+    if len(sys.argv) > 1 and sys.argv[1] == "--text":
+        sys.exit(main_text(sys.argv[2:]))
+    if len(sys.argv) > 1 and sys.argv[1] in ("-h", "--help"):
+        print(__doc__.strip())
+        sys.exit(0)
+    sys.exit(main_gui())

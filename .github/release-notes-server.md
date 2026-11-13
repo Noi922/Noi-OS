@@ -19,10 +19,13 @@ Die IP-Adresse steht nach der Anmeldung an der Konsole.
 | Fernzugriff | SSH (root-Anmeldung gesperrt), fail2ban sperrt Angreifer aus |
 | Web-Verwaltung | **Cockpit** unter `https://IP-Adresse:9090` – Auslastung, Dienste, Updates, Speicher, Container |
 | Sicherheit | Firewall (nur SSH und Cockpit offen), automatische Sicherheitsupdates, Secure Boot |
-| Container | Podman (Docker-kompatibel) |
+| Container | **Docker** mit Compose und Buildx (ohne sudo nutzbar), dazu Podman |
 | Werkzeug | `noi update`, `noi doktor`, `noi netz`, `noi status`, `noi port auf 8080`, `noi bericht` |
 | Shell | [hamster](https://github.com/Noi922/Linux-plugin) – erklärt Fehler, vervollständigt Befehle (zurück: `noi shell bash`) |
 | Netzwerk | DHCP auf allen Kabel-Netzwerkkarten; feste IP in `/etc/netplan/01-noios-dhcp.yaml` |
+
+**Docker und die Firewall:** Mit `-p 8080:80` veröffentlichte Container-Ports sind von
+außen erreichbar, auch ohne Firewall-Freigabe. Nur lokal: `-p 127.0.0.1:8080:80`.
 
 Mindestens 8 GB Festplatte und 1 GB RAM. Prüfsumme in `SHA256SUMS`.
 

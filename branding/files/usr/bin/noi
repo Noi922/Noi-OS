@@ -9,6 +9,7 @@
 #   noi status      Dienste, offene Ports, Anmeldungen
 #   noi port        Port in der Firewall freigeben/schließen: auf | zu | liste
 #   noi shell       Standard-Shell wechseln: hamster | bash
+#   noi paket       App-Pakete installieren: gaming | kreativ | medien | …
 #   noi bericht     Systembericht für Fehlermeldungen in eine Datei schreiben
 #   noi thema       Farbschema wechseln: hell | dunkel
 #   noi hintergrund Camo-Hintergrundbild wechseln: wald | wueste | nacht | winter
@@ -468,6 +469,63 @@ cmd_shell() {
     fi
 }
 
+# --- noi paket: mehrere Programme auf einmal installieren (Flathub) -------------
+paket_apps() {
+    case "$1" in
+        gaming)        echo "com.valvesoftware.Steam net.lutris.Lutris com.heroicgameslauncher.hgl" ;;
+        kreativ)       echo "org.kde.krita org.inkscape.Inkscape org.kde.kdenlive org.audacityteam.Audacity" ;;
+        medien)        echo "com.spotify.Client com.obsproject.Studio org.kde.haruna" ;;
+        kommunikation) echo "org.mozilla.Thunderbird org.signal.Signal com.discordapp.Discord" ;;
+        entwicklung)   echo "com.vscodium.codium io.github.shiftey.Desktop" ;;
+        *) return 1 ;;
+    esac
+}
+paket_text() {
+    case "$1" in
+        gaming)        echo "Steam, Lutris, Heroic (Epic/GOG)" ;;
+        kreativ)       echo "Krita, Inkscape, Kdenlive, Audacity" ;;
+        medien)        echo "Spotify, OBS Studio, Haruna (Videoplayer)" ;;
+        kommunikation) echo "Thunderbird, Signal, Discord" ;;
+        entwicklung)   echo "VSCodium, GitHub Desktop" ;;
+    esac
+}
+PAKETE="gaming kreativ medien kommunikation entwicklung"
+
+cmd_paket() {
+    local name=${1:-} app fehl=0 p
+    if [[ -z $name || $name == liste ]]; then
+        titel "App-Pakete (aus Flathub)"
+        for p in $PAKETE; do
+            printf '  %s%-14s%s %s\n' "$B" "$p" "$R" "$(paket_text "$p")"
+        done
+        echo; hinweis "Installieren:  noi paket gaming"; echo
+        return 0
+    fi
+    if ! paket_apps "$name" >/dev/null; then
+        fehler "Unbekanntes Paket: $name"; hinweis "Verfügbar: $PAKETE"; return 1
+    fi
+    command -v flatpak >/dev/null || { fehler "Flatpak ist nicht installiert"; return 1; }
+    if ! flatpak remotes --columns=name 2>/dev/null | grep -qx flathub; then
+        titel "Flathub als App-Quelle einrichten"
+        als_root flatpak remote-add --system --if-not-exists flathub \
+            https://dl.flathub.org/repo/flathub.flatpakrepo \
+            || { fehler "Flathub nicht erreichbar – Internetverbindung prüfen (noi netz)"; return 1; }
+    fi
+    titel "Paket „$name“: $(paket_text "$name")"
+    for app in $(paket_apps "$name"); do
+        if flatpak info "$app" >/dev/null 2>&1; then
+            ok "$app ist schon installiert"
+        elif flatpak install -y --noninteractive flathub "$app"; then
+            ok "$app installiert"
+        else
+            fehler "$app konnte nicht installiert werden"; fehl=1
+        fi
+    done
+    echo
+    if (( fehl )); then hinweis "Nicht alles hat geklappt – später erneut versuchen."; return 1; fi
+    ok "${B}Fertig!${R} Die Programme stehen im Startmenü."
+}
+
 # --- noi bericht: alles Wichtige für eine Fehlermeldung in eine Datei -----------
 cmd_bericht() {
     local datei="${1:-$HOME/noi-bericht-$(date +%Y%m%d-%H%M).txt}"
@@ -563,6 +621,7 @@ cmd_hilfe() {
   ${B}noi status${R}       Dienste, offene Ports, Anmeldungen
   ${B}noi port${R}         Firewall: noi port auf 8080 | zu 8080 | liste
   ${B}noi shell${R}        Standard-Shell wechseln: hamster | bash
+  ${B}noi paket${R}        App-Pakete: gaming | kreativ | medien | kommunikation | entwicklung
   ${B}noi bericht${R}      Systembericht für Fehlermeldungen speichern
   ${B}noi thema${R}        Farbschema wechseln: hell | dunkel
   ${B}noi hintergrund${R}  Hintergrundbild: wald | wueste | nacht | winter
@@ -590,6 +649,7 @@ case "${1:-hilfe}" in
     status|dienste)       cmd_status ;;
     port|firewall)        cmd_port "${2:-}" "${3:-}" ;;
     shell)                cmd_shell "${2:-}" ;;
+    paket|pakete|bundle)  cmd_paket "${2:-}" ;;
     bericht|report)       cmd_bericht "${2:-}" ;;
     thema|theme)          cmd_thema "${2:-}" ;;
     hintergrund|wallpaper) cmd_hintergrund "${2:-}" ;;

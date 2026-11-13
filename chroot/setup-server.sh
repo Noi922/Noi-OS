@@ -225,6 +225,24 @@ APT::Periodic::Unattended-Upgrade "1";
 APT::Periodic::AutocleanInterval "7";
 EOF
 
+# --- Docker ------------------------------------------------------------------
+# Protokolle begrenzen (sonst füllen geschwätzige Container die Festplatte)
+install -d /etc/docker
+cat > /etc/docker/daemon.json <<'EOF'
+{
+  "log-driver": "json-file",
+  "log-opts": { "max-size": "10m", "max-file": "3" }
+}
+EOF
+systemctl enable docker.service containerd.service >/dev/null 2>&1 || true
+# Nicht im Live-System (Installer) starten – dort bringt Docker nichts
+install -d /etc/systemd/system/docker.service.d /etc/systemd/system/docker.socket.d \
+           /etc/systemd/system/containerd.service.d
+for u in docker.service docker.socket containerd.service; do
+    printf '[Unit]\nConditionKernelCommandLine=!boot=casper\n' \
+        > "/etc/systemd/system/$u.d/10-noios-nicht-live.conf"
+done
+
 # --- Web-Verwaltung ----------------------------------------------------------
 systemctl enable cockpit.socket >/dev/null 2>&1 || true
 

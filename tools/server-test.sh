@@ -101,14 +101,14 @@ if [[ ${SKIP_ISO_BOOT:-0} != 1 ]]; then
         sleep 15; t=$((t + 15))
         kill -0 "$QEMU_PID" 2>/dev/null || break
         screenshot "01-live-installer"
-        # Der Installer-Dialog (whiptail) hat einen einfarbig blauen Hintergrund
+        # Der Installer-Dialog (whiptail) ist ein hellgrauer Kasten vor einfarbigem Hintergrund
         if [[ -f $OUT/01-live-installer.png ]] && python3 - "$OUT/01-live-installer.png" <<'PY' 2>/dev/null
 import sys
 from PIL import Image
 im = Image.open(sys.argv[1]).convert("RGB")
 px = [im.getpixel((x, y)) for x in range(0, im.width, 16) for y in range(0, im.height, 16)]
-blue = sum(1 for r, g, b in px if b > 120 and r < 90 and g < 90)
-sys.exit(0 if blue > len(px) * 0.4 else 1)
+grau = sum(1 for r, g, b in px if min(r, g, b) > 150 and max(r, g, b) - min(r, g, b) < 25)
+sys.exit(0 if len(px) * 0.08 < grau < len(px) * 0.5 else 1)
 PY
         then break; fi
     done
@@ -178,8 +178,8 @@ boot_and_check() {   # $1 = Name, Rest = zusätzliche QEMU-Optionen
         "$(echo "$out" | tr '\n' ' ')" optional
     out=$(ssh_run 'noi hilfe | grep -c "noi "; noi info | grep -c Server' 2>&1 | tr '\n' ' ')
     check "noi-Werkzeug" "$([[ $out =~ ^[0-9]+\ [1-9] ]] && echo 0 || echo 1)" "$out"
-    out=$(ssh_run 'systemctl is-enabled cockpit.socket fail2ban ufw unattended-upgrades 2>&1 | tr "\n" " "' 2>&1)
-    check "Dienste eingeschaltet (Cockpit, fail2ban, ufw, Updates)" \
+    out=$(ssh_run 'systemctl is-enabled cockpit.socket fail2ban ufw unattended-upgrades docker 2>&1 | tr "\n" " "' 2>&1)
+    check "Dienste eingeschaltet (Cockpit, fail2ban, ufw, Updates, Docker)" \
         "$([[ $out != *disabled* && $out == *enabled* ]] && echo 0 || echo 1)" "$out"
     out=$(curl -ksS -m 30 -o /dev/null -w '%{http_code}' "https://127.0.0.1:$WEB_PORT/" 2>&1)
     check "Web-Verwaltung (Cockpit) antwortet" "$([[ $out == 200 ]] && echo 0 || echo 1)" "HTTP $out"
@@ -188,6 +188,9 @@ boot_and_check() {   # $1 = Name, Rest = zusätzliche QEMU-Optionen
         "$([[ $out == /usr/bin/hamster\ hamster* ]] && echo 0 || echo 1)" "$out"
     out=$(ssh_run "echo '$TESTPASS' | sudo -S -p '' noi port auf 8080/tcp >/dev/null 2>&1; echo '$TESTPASS' | sudo -S -p '' noi status | grep -c '8080/tcp'; echo '$TESTPASS' | sudo -S -p '' noi port zu 8080/tcp | grep -c geschlossen" 2>&1 | tr '\n' ' ')
     check "noi port / noi status" "$([[ $out == "1 1 " ]] && echo 0 || echo 1)" "$out"
+    out=$(ssh_run 'docker info --format "{{.ServerVersion}}" 2>&1; docker compose version --short 2>&1' | tr '\n' ' ')
+    check "Docker läuft (ohne sudo), Compose vorhanden" \
+        "$([[ $out =~ ^[0-9]+\.[0-9.]+.*\ v?[0-9]+\.[0-9] ]] && echo 0 || echo 1)" "$out"
     out=$(ssh_run 'podman --version' 2>&1)
     check "Podman vorhanden" "$([[ $out == podman* ]] && echo 0 || echo 1)" "$out" optional
     out=$(ssh_run 'systemctl --failed --no-legend --plain | awk "{print \$1}" | tr "\n" " "' 2>&1)

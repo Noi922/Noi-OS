@@ -25,7 +25,9 @@ set -euo pipefail
 DISK="" HOST="" USERNAME="" PASSWORD="" PWHASH="" SSHKEY="" SOURCE="/rofs"
 YES=0 REBOOT=0
 TARGET="/target"
-TITLE="Noi OS Server – Installation"
+TITLE="Noi OS Server - Installation"     # nur ASCII: die Konsolenschrift kennt kein "–"
+# Dialoge in Camo-Grün statt Ubuntu-Lila
+export NEWT_COLORS='root=,green window=black,lightgray border=black,lightgray shadow=black,black title=black,lightgray button=white,green actbutton=white,black compactbutton=black,lightgray checkbox=black,lightgray actcheckbox=white,green entry=black,white label=black,lightgray listbox=black,lightgray actlistbox=white,green actsellistbox=white,green textbox=black,lightgray acttextbox=white,green helpline=white,green roottext=white,green'
 
 die()  { echo -e "\n\e[1;31mFehler:\e[0m $*" >&2; exit 1; }
 step() { echo -e "\n\e[1;32m==>\e[0m \e[1m$*\e[0m"; }
@@ -256,6 +258,10 @@ fi
 USERSHELL=$(sed -n 's/^DSHELL=//p' "$TARGET/etc/adduser.conf" 2>/dev/null | tail -1)
 [[ -n $USERSHELL && -x $TARGET$USERSHELL ]] || USERSHELL=/bin/bash
 chroot "$TARGET" useradd -m -s "$USERSHELL" -c "$USERNAME" -G sudo,adm "$USERNAME"
+# Docker ohne sudo benutzen (die Gruppe gibt es nur, wenn Docker installiert ist)
+if chroot "$TARGET" getent group docker >/dev/null; then
+    chroot "$TARGET" usermod -aG docker "$USERNAME"
+fi
 chroot "$TARGET" usermod -p "$PWHASH" "$USERNAME"
 chroot "$TARGET" passwd -l root >/dev/null
 if [[ -n $SSHKEY ]]; then
@@ -343,6 +349,7 @@ cat <<EOF
 
     Anmelden:        $USERNAME  (an der Konsole oder per  ssh $USERNAME@<IP-Adresse>)
     Web-Verwaltung:  https://<IP-Adresse>:9090  (Cockpit)
+    Container:       docker run hello-world   ·   docker compose up -d
     Werkzeug:        noi hilfe
 
   Installationsmedium entfernen und neu starten.

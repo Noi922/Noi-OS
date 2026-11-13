@@ -50,6 +50,7 @@ jobs:
           sh -n chroot/calamares/noios-installer-cleanup
           python3 -m py_compile branding/files/usr/bin/noi-zentrale \
               branding/files/usr/bin/noi-notizen branding/files/usr/bin/noi-fokus \
+              branding/files/usr/bin/noi-aufgaben branding/files/usr/bin/noi-passwort \
               branding/files/usr/bin/noios-autoscale chroot/calamares/automirror.py
 
       - name: Speicherplatz freigeben

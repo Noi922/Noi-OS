@@ -53,7 +53,10 @@ cockpit-storaged
 cockpit-packagekit
 cockpit-podman
 
-# --- Container (Docker-kompatibel, ohne Dienst im Hintergrund) ---------------
+# --- Container: Docker (mit Compose und Buildx) und Podman -------------------
+docker.io
+docker-compose-v2
+docker-buildx
 podman
 uidmap
 slirp4netns

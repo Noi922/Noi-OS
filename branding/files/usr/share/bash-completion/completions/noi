@@ -4,9 +4,10 @@ _noi() {
     case $prev in
         thema)       mapfile -t COMPREPLY < <(compgen -W "hell dunkel" -- "$cur") ;;
         hintergrund) mapfile -t COMPREPLY < <(compgen -W "wald wueste nacht winter" -- "$cur") ;;
+        paket)       mapfile -t COMPREPLY < <(compgen -W "gaming kreativ medien kommunikation entwicklung liste" -- "$cur") ;;
         port)        mapfile -t COMPREPLY < <(compgen -W "auf zu liste" -- "$cur") ;;
         shell)       mapfile -t COMPREPLY < <(compgen -W "hamster bash" -- "$cur") ;;
-        noi)         mapfile -t COMPREPLY < <(compgen -W "update info aufraeumen sicherung doktor netz status port shell bericht thema hintergrund zentrale hilfe" -- "$cur") ;;
+        noi)         mapfile -t COMPREPLY < <(compgen -W "update info aufraeumen sicherung doktor netz status port shell paket bericht thema hintergrund zentrale hilfe" -- "$cur") ;;
     esac
 }
 complete -F _noi noi
