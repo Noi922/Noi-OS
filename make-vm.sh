@@ -144,6 +144,10 @@ chmod 440 /etc/sudoers
 # Assistent auf Noi OS umstellen
 rm -rf /etc/calamares/branding/kubuntu /home/oem/Desktop
 sed -i 's/^branding:.*/branding: ${DISTRO_ID}/' /etc/calamares/settings.conf
+# Shell neuer Benutzer wie im Installer der ISO (hamster, falls eingebaut)
+if grep -q '^DSHELL=/usr/bin/hamster' /etc/adduser.conf 2>/dev/null; then
+    sed -i 's|^\(\s*shell:\s*\)/bin/bash|\1/usr/bin/hamster|' /etc/calamares/modules/users.conf
+fi
 # Der Assistent entfernt am Ende nur Calamares – dafür braucht es keine frischen
 # Paketlisten. "update_db: true" ließe die Ersteinrichtung mit "Paketmanager-
 # Fehler" scheitern, sobald der Spiegelserver gerade nicht erreichbar ist.

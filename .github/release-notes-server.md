@@ -20,7 +20,8 @@ Die IP-Adresse steht nach der Anmeldung an der Konsole.
 | Web-Verwaltung | **Cockpit** unter `https://IP-Adresse:9090` – Auslastung, Dienste, Updates, Speicher, Container |
 | Sicherheit | Firewall (nur SSH und Cockpit offen), automatische Sicherheitsupdates, Secure Boot |
 | Container | Podman (Docker-kompatibel) |
-| Werkzeug | `noi update`, `noi doktor`, `noi netz`, `noi info`, `noi aufraeumen` |
+| Werkzeug | `noi update`, `noi doktor`, `noi netz`, `noi status`, `noi port auf 8080`, `noi bericht` |
+| Shell | [hamster](https://github.com/Noi922/Linux-plugin) – erklärt Fehler, vervollständigt Befehle (zurück: `noi shell bash`) |
 | Netzwerk | DHCP auf allen Kabel-Netzwerkkarten; feste IP in `/etc/netplan/01-noios-dhcp.yaml` |
 
 Mindestens 8 GB Festplatte und 1 GB RAM. Prüfsumme in `SHA256SUMS`.

@@ -31,6 +31,11 @@ BLOCK_SNAP="yes"                # snapd sperren (wie Linux Mint)
 FIREFOX_FROM_MOZILLA="yes"      # Firefox als .deb aus Mozillas APT-Repo statt Snap
 SQUASHFS_COMP="xz"              # xz = kleinste ISO, zstd = schneller Build
 
+# --- Shell "hamster" (https://github.com/Noi922/Linux-plugin) ----------------
+HAMSTER="yes"                   # hamster installieren (Desktop und Server)
+HAMSTER_DEFAULT_SHELL="yes"     # hamster als Standard-Shell für neue Benutzer
+                                # (Zurück pro Benutzer: chsh -s /bin/bash)
+
 # --- Edition -----------------------------------------------------------------
 # desktop = KDE Plasma mit grafischem Installer (Standard)
 # server  = ohne Desktop: SSH, Firewall, Web-Verwaltung, Text-Installer

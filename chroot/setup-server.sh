@@ -74,6 +74,9 @@ log "Pakete aus packages-server.list installieren"
 mapfile -t PKGS < <(sed -e 's/#.*//' -e 's/[[:space:]]*$//' "$B/packages.list" | grep -v '^$')
 "${APT[@]}" install --no-install-recommends "${PKGS[@]}"
 
+# --- Shell hamster -----------------------------------------------------------
+bash "$B/install-hamster.sh"
+
 # --- Identität: os-release ---------------------------------------------------
 # os-release gehört zu base-files; per dpkg-divert bleibt unsere Fassung auch
 # nach Updates erhalten. ID bleibt "ubuntu" (Sicherheitsupdates, PPAs).

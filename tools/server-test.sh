@@ -24,6 +24,7 @@ mkdir -p "$OUT"
 OUT="$(cd "$OUT" && pwd)"
 WORK="$(mktemp -d "${TMPDIR:-/var/tmp}/noi-server-test.XXXXXX")"
 DISK="$WORK/disk.raw"
+SOCK="$(mktemp -d /tmp/noi-st.XXXXXX)"    # kurzer Pfad: Unix-Sockets sind auf 107 Zeichen begrenzt
 LOOP="" QEMU_PID=""
 RESULTS=()
 FAILED=0
@@ -46,7 +47,7 @@ cleanup() {
     stop_vm
     mountpoint -q "$WORK/squash" 2>/dev/null && umount -l "$WORK/squash"
     [[ -n $LOOP ]] && losetup -d "$LOOP" 2>/dev/null
-    rm -rf "$WORK"
+    rm -rf "$WORK" "$SOCK"
 }
 trap cleanup EXIT
 
@@ -57,10 +58,10 @@ ACCEL=(-accel tcg -cpu max)
 [[ -w /dev/kvm ]] && ACCEL=(-enable-kvm -cpu host)
 qemu() {    # gemeinsame Optionen; weitere per Argument
     qemu-system-x86_64 "${ACCEL[@]}" -m 2048 -smp 2 -display none \
-        -monitor "unix:$WORK/mon.sock,server,nowait" -serial "file:$WORK/serial.log" "$@" &
+        -monitor "unix:$SOCK/mon.sock,server,nowait" -serial "file:$WORK/serial.log" "$@" &
     QEMU_PID=$!
 }
-mon() { printf '%s\n' "$1" | socat - "unix-connect:$WORK/mon.sock" >/dev/null 2>&1; }
+mon() { printf '%s\n' "$1" | socat - "unix-connect:$SOCK/mon.sock" >/dev/null 2>&1; }
 screenshot() {
     command -v socat >/dev/null || return 0
     mon "screendump $WORK/shot.ppm"; sleep 2
@@ -182,6 +183,11 @@ boot_and_check() {   # $1 = Name, Rest = zusätzliche QEMU-Optionen
         "$([[ $out != *disabled* && $out == *enabled* ]] && echo 0 || echo 1)" "$out"
     out=$(curl -ksS -m 30 -o /dev/null -w '%{http_code}' "https://127.0.0.1:$WEB_PORT/" 2>&1)
     check "Web-Verwaltung (Cockpit) antwortet" "$([[ $out == 200 ]] && echo 0 || echo 1)" "HTTP $out"
+    out=$(ssh_run 'getent passwd "$USER" | cut -d: -f7; hamster --version' 2>&1 | tr '\n' ' ')
+    check "Shell hamster ist Standard-Shell des Benutzers" \
+        "$([[ $out == /usr/bin/hamster\ hamster* ]] && echo 0 || echo 1)" "$out"
+    out=$(ssh_run "echo '$TESTPASS' | sudo -S -p '' noi port auf 8080/tcp >/dev/null 2>&1; echo '$TESTPASS' | sudo -S -p '' noi status | grep -c '8080/tcp'; echo '$TESTPASS' | sudo -S -p '' noi port zu 8080/tcp | grep -c geschlossen" 2>&1 | tr '\n' ' ')
+    check "noi port / noi status" "$([[ $out == "1 1 " ]] && echo 0 || echo 1)" "$out"
     out=$(ssh_run 'podman --version' 2>&1)
     check "Podman vorhanden" "$([[ $out == podman* ]] && echo 0 || echo 1)" "$out" optional
     out=$(ssh_run 'systemctl --failed --no-legend --plain | awk "{print \$1}" | tr "\n" " "' 2>&1)

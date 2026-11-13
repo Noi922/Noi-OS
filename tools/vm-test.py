@@ -361,6 +361,11 @@ def main():
                                "python3 -c 'import PyQt5.QtWidgets' 2>/dev/null || echo PyQt5")
         check("Noi-Apps (Zentrale, Notizen, Fokus) startbereit", out == "",
               "alle da" if not out else "fehlt: " + out.replace("\n", " "), required=False)
+        code, out, _ = qga.run("hamster --version 2>&1 | head -1; grep -c '^DSHELL=/usr/bin/hamster' /etc/adduser.conf; "
+                               "grep -c 'shell: */usr/bin/hamster' /etc/calamares/modules/users.conf")
+        check("Shell hamster installiert und Standard für neue Benutzer",
+              out.startswith("hamster") and out.split("\n")[1:] == ["1", "1"], out.replace("\n", " / "),
+              required=False)
         code, out, _ = qga.run("noi doktor 2>&1 | grep -c '✔'")
         check("noi doktor läuft", out.isdigit() and int(out) >= 3, f"{out} Prüfungen ok", required=False)
         code, out, _ = qga.run("systemctl is-enabled noios-flatpak-update.timer")

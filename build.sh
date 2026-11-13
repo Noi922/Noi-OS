@@ -114,6 +114,7 @@ stage_chroot() {
     # Die Edition steht nur in der Umgebung des Aufrufers – fest eintragen,
     # damit das Skript im chroot dieselbe sieht.
     { echo "NOI_EDITION=$EDITION"; cat "$ROOT/config.sh"; } > "$B/config.sh"
+    cp "$ROOT/chroot/install-hamster.sh" "$B/"
     if [[ $EDITION == server ]]; then
         setup="setup-server.sh"
         cp "$ROOT/config/packages-server.list" "$B/packages.list"

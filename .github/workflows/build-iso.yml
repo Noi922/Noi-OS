@@ -44,6 +44,7 @@ jobs:
           python3 tests/test_automirror.py
           bash -n build.sh chroot/setup.sh make-vm.sh branding/build-deb.sh branding/files/usr/bin/noi
           sh -n chroot/calamares/noios-installer-cleanup
+          bash -n chroot/install-hamster.sh
           python3 -m py_compile branding/files/usr/bin/noi-zentrale \
               branding/files/usr/bin/noi-notizen branding/files/usr/bin/noi-fokus \
               branding/files/usr/bin/noios-autoscale chroot/calamares/automirror.py

@@ -252,7 +252,10 @@ if [[ ! -e /dev/disk/by-uuid/$ROOT_UUID ]]; then
 fi
 
 [[ -n $PWHASH ]] || PWHASH=$(printf '%s' "$PASSWORD" | chroot "$TARGET" openssl passwd -6 -stdin)
-chroot "$TARGET" useradd -m -s /bin/bash -c "$USERNAME" -G sudo,adm "$USERNAME"
+# Shell: die Vorgabe des Systems für neue Benutzer (hamster, falls eingebaut)
+USERSHELL=$(sed -n 's/^DSHELL=//p' "$TARGET/etc/adduser.conf" 2>/dev/null | tail -1)
+[[ -n $USERSHELL && -x $TARGET$USERSHELL ]] || USERSHELL=/bin/bash
+chroot "$TARGET" useradd -m -s "$USERSHELL" -c "$USERNAME" -G sudo,adm "$USERNAME"
 chroot "$TARGET" usermod -p "$PWHASH" "$USERNAME"
 chroot "$TARGET" passwd -l root >/dev/null
 if [[ -n $SSHKEY ]]; then

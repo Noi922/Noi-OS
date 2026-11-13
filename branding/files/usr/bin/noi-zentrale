@@ -213,7 +213,13 @@ class Zentrale(QWidget):
             ("Sicherung erstellen", "document-save",
              "Systemschnappschuss mit Timeshift", lambda: self.term("sicherung")),
             ("System prüfen", "dialog-ok-apply",
-             "Noi-Doktor: Speicher, Dienste, Netz, Akku", self.doktor),
+             "Noi-Doktor: Speicher, Dienste, Netz, Akku", lambda: self.run_noi("doktor")),
+            ("Netzwerk prüfen", "network-wired",
+             "Schritt für Schritt: Karte, IP-Adresse, Route, DNS, Webseiten",
+             lambda: self.run_noi("netz")),
+            ("Systembericht speichern", "document-export",
+             "Alles Wichtige für eine Fehlermeldung in eine Textdatei schreiben",
+             lambda: self.run_noi("bericht")),
         ]
         for i, (text, icon, tip, fn) in enumerate(actions):
             b = QPushButton(QIcon.fromTheme(icon), "  " + text)
@@ -226,7 +232,8 @@ class Zentrale(QWidget):
         self.output = QPlainTextEdit()
         self.output.setReadOnly(True)
         self.output.setFont(QFont("monospace"))
-        self.output.setPlaceholderText("Ergebnis von „System prüfen“ erscheint hier.")
+        self.output.setPlaceholderText(
+            "Ergebnisse von „System prüfen“, „Netzwerk prüfen“ und „Systembericht“ erscheinen hier.")
         lay.addWidget(self.output, 1)
         self.proc = None
         return w
@@ -237,18 +244,19 @@ class Zentrale(QWidget):
         elif not in_terminal("noi", sub):
             QMessageBox.warning(self, "Noi-Zentrale", "Kein Terminal-Programm gefunden.")
 
-    def doktor(self):
+    def run_noi(self, sub):
+        """noi-Befehl ohne Passwortabfrage ausführen und die Ausgabe anzeigen."""
         if self.proc and self.proc.state() != QProcess.NotRunning:
             return
-        self.output.setPlainText("Prüfe …\n")
+        self.output.setPlainText("Bitte warten …\n")
         self.proc = QProcess(self)
         self.proc.setProcessChannelMode(QProcess.MergedChannels)
-        self.proc.readyReadStandardOutput.connect(self._doktor_out)
+        self.proc.readyReadStandardOutput.connect(self._noi_out)
         self.proc.errorOccurred.connect(
-            lambda _e: self.output.appendPlainText("„noi doktor“ konnte nicht gestartet werden."))
-        self.proc.start("noi", ["doktor"])
+            lambda _e: self.output.appendPlainText(f"„noi {sub}“ konnte nicht gestartet werden."))
+        self.proc.start("noi", [sub])
 
-    def _doktor_out(self):
+    def _noi_out(self):
         data = bytes(self.proc.readAllStandardOutput()).decode("utf-8", "replace")
         self.output.appendPlainText(data.rstrip("\n"))
 

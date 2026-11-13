@@ -23,7 +23,8 @@ Sicherheitsupdates bis 2029.
 | Handy | **KDE Connect**: Dateien, Benachrichtigungen und Zwischenablage mit dem Handy teilen |
 | Sicherheit | automatische Sicherheitsupdates (auch Firefox), Firewall aktiv, Secure Boot, AppArmor |
 | System | zram (schneller Auslagerungsspeicher), Timeshift für Sicherungen, Willkommens-Assistent |
-| `noi`-Werkzeug | `noi update` (System + Flatpak + Firmware), `noi info`, `noi aufraeumen`, `noi sicherung`, `noi doktor` (System-Check), `noi thema hell\|dunkel`, `noi hintergrund wald\|wueste\|nacht\|winter` – auch im Startmenü, mit Tab-Vervollständigung; Flatpak-Apps aktualisieren sich wöchentlich automatisch |
+| `noi`-Werkzeug | `noi update` (System + Flatpak + Firmware + hamster), `noi info`, `noi aufraeumen`, `noi sicherung`, `noi doktor` (System-Check), `noi netz` (Internet-Diagnose), `noi status` (Dienste, offene Ports), `noi port auf\|zu 8080` (Firewall), `noi shell hamster\|bash`, `noi bericht` (Systembericht für Fehlermeldungen), `noi thema hell\|dunkel`, `noi hintergrund wald\|wueste\|nacht\|winter` – auch im Startmenü, mit Tab-Vervollständigung; Flatpak-Apps aktualisieren sich wöchentlich automatisch |
+| Shell | **[hamster](https://github.com/Noi922/Linux-plugin)** als Standard-Shell: erklärt Fehler, vervollständigt Befehle, läuft auf echter bash (zurück: `noi shell bash`; abschaltbar in `config.sh`) |
 | Eigene Apps | **Noi-Zentrale** (Auslastung, Pflege, Aussehen, App-Empfehlungen), **Noi-Notizen** (speichert von selbst), **Noi-Fokus** (Pomodoro-Timer) |
 | Komfort | Nachtlicht ab 20 Uhr, GameMode für Spiele, Firefox mit uBlock Origin und ohne Telemetrie |
 | Anzeige | passt sich automatisch an: Skalierung nach Pixeldichte (100–250 %, wie Windows), in VMs wächst die Auflösung mit dem Fenster |
@@ -42,7 +43,8 @@ Dieselbe Basis, aber schlank für Heimserver, VMs und Mini-PCs:
 | Web-Verwaltung | **Cockpit** unter `https://IP-Adresse:9090`: Auslastung, Dienste, Updates, Speicher, Container |
 | Sicherheit | Firewall (nur SSH und Cockpit offen), automatische Sicherheitsupdates, Secure Boot |
 | Container | Podman (Docker-kompatibel) |
-| Werkzeug | `noi update`, `noi doktor`, `noi netz`, `noi info`, `noi aufraeumen` |
+| Werkzeug | `noi update`, `noi doktor`, `noi netz`, `noi status`, `noi port auf\|zu 8080`, `noi bericht`, `noi info`, `noi aufraeumen` |
+| Shell | **hamster** als Standard-Shell des angelegten Benutzers (Skripte, `ssh host befehl`, scp laufen weiter über bash) |
 | Netzwerk | DHCP auf allen Kabel-Netzwerkkarten (`/etc/netplan/01-noios-dhcp.yaml` für feste IP) |
 
 **Herunterladen:** *Actions* → **„Noi OS Server bauen“** → *Run workflow*; die ISO
@@ -70,6 +72,7 @@ noi-os/
 ├── chroot/setup.sh           ← richtet das System im chroot ein
 ├── chroot/calamares/         ← robuster Ersatz für den Installer-Schritt "automirror"
 ├── chroot/setup-server.sh    ← richtet die Server-Edition ein
+├── chroot/install-hamster.sh ← installiert die Shell hamster (beide Editionen)
 ├── config/packages-server.list  ← Pakete der Server-Edition
 ├── server/                   ← Text-Installer, Begrüßung, SSH-Schlüssel-Dienst (Server)
 ├── iso/grub.cfg              ← Bootmenü der Live-ISO
