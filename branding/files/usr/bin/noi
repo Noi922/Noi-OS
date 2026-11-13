@@ -5,6 +5,13 @@
 #   noi aufraeumen  Speicherplatz freigeben
 #   noi sicherung   Systemschnappschuss erstellen (Timeshift)
 #   noi doktor      System prüfen (Speicher, Dienste, Updates, Netz, Akku)
+#   noi netz        Internet-Diagnose Schritt für Schritt
+#   noi status      Dienste, offene Ports, Anmeldungen
+#   noi port        Port in der Firewall freigeben/schließen: auf | zu | liste
+#   noi shell       Standard-Shell wechseln: hamster | bash
+#   noi paket       App-Pakete installieren: gaming | kreativ | medien | …
+#   noi dev         Programmiersprachen nachinstallieren: python | node | c | …
+#   noi bericht     Systembericht für Fehlermeldungen in eine Datei schreiben
 #   noi thema       Farbschema wechseln: hell | dunkel
 #   noi hintergrund Camo-Hintergrundbild wechseln: wald | wueste | nacht | winter
 #   noi zentrale    grafische Noi-Zentrale öffnen
@@ -42,6 +49,30 @@ cmd_update() {
         titel "Flatpak-Apps aktualisieren"
         if flatpak update -y --noninteractive; then ok "Flatpak-Apps sind aktuell"
         else fehler "Flatpak-Update fehlgeschlagen"; fi
+    fi
+
+    if command -v hamster >/dev/null && [[ ! -e /etc/apt/sources.list.d/hamster.list ]]; then
+        titel "Shell hamster aktualisieren"
+        local tmp alt neu
+        tmp=$(mktemp -d); chmod 755 "$tmp"
+        alt=$(dpkg-query -W -f='${Version}' hamster 2>/dev/null)
+        if curl -fsSL -m 60 -o "$tmp/hamster_all.deb" \
+                https://github.com/Noi922/Linux-plugin/releases/latest/download/hamster_all.deb \
+                && [[ $(dpkg-deb -f "$tmp/hamster_all.deb" Package 2>/dev/null) == hamster ]]; then
+            neu=$(dpkg-deb -f "$tmp/hamster_all.deb" Version)
+            if dpkg --compare-versions "$neu" gt "${alt:-0}"; then
+                if als_root apt-get install -y -qq "$tmp/hamster_all.deb"; then
+                    ok "hamster $alt → $neu"
+                else
+                    fehler "hamster-Update fehlgeschlagen"
+                fi
+            else
+                ok "hamster ist aktuell ($alt)"
+            fi
+        else
+            hinweis "hamster-Update übersprungen (GitHub nicht erreichbar)"
+        fi
+        rm -rf "$tmp"
     fi
 
     if command -v fwupdmgr >/dev/null; then
@@ -106,8 +137,9 @@ cmd_info() {
     # shellcheck disable=SC1091
     os=$(. /etc/os-release; echo "$PRETTY_NAME")
     kern=$(uname -r)
-    de="KDE Plasma $(dpkg-query -W -f='${Version}' plasma-workspace 2>/dev/null \
-        | sed -E 's/^[0-9]+://; s/-.*//')"
+    de=$(dpkg-query -W -f='${Version}' plasma-workspace 2>/dev/null \
+        | sed -E 's/^[0-9]+://; s/-.*//')
+    if [[ -n $de ]]; then de="KDE Plasma $de"; else de="keiner (Server)"; fi
     sitzung=${XDG_SESSION_TYPE:-}
     cpu=$(awk -F: '/model name/{gsub(/^ +/,"",$2); print $2; exit}' /proc/cpuinfo)
     gpu=$(lspci 2>/dev/null | awk -F': ' '/VGA|3D|Display/{print $2; exit}')
@@ -252,6 +284,343 @@ cmd_doktor() {
     fi
 }
 
+# --- noi netz: Internet-Diagnose Schritt für Schritt ---------------------------
+cmd_netz() {
+    local probleme=0 gw dns
+    titel "Netzwerk-Diagnose"
+
+    # 1. Netzwerkkarte vorhanden?
+    local karten
+    karten=$(ls /sys/class/net 2>/dev/null | grep -v '^lo$' | tr '\n' ' ')
+    if [[ -z ${karten// /} ]]; then
+        fehler "1. Keine Netzwerkkarte gefunden"
+        hinweis "In einer VM: Netzwerkadapter in den VM-Einstellungen aktivieren"
+        hinweis "(VirtualBox: Ändern → Netzwerk → Adapter 1 → „Netzwerkadapter aktivieren“, NAT)"
+        return 1
+    fi
+    ok "1. Netzwerkkarte(n): $karten"
+
+    # 2. Verbindung aufgebaut (Kabel/WLAN, IP-Adresse)?
+    if command -v nmcli >/dev/null; then
+        nmcli -t -f DEVICE,TYPE,STATE device 2>/dev/null | grep -v ':loopback:' \
+            | awk -F: '{printf "      %-12s %-10s %s\n", $1, $2, $3}'
+        if nmcli -t -f STATE device 2>/dev/null | grep -qx 'unmanaged\|nicht verwaltet'; then
+            hinweis "Eine Karte ist „nicht verwaltet“ – NetworkManager kümmert sich nicht darum"
+        fi
+    fi
+    local ip4
+    ip4=$(ip -4 -o addr show scope global 2>/dev/null | awk '{print $2 " " $4}' | tr '\n' ' ')
+    if [[ -n $ip4 ]]; then
+        ok "2. IP-Adresse: $ip4"
+    else
+        fehler "2. Keine IP-Adresse erhalten (DHCP)"; probleme=1
+        hinweis "Kabel eingesteckt / WLAN verbunden? In einer VM: „Kabel verbunden“ anhaken"
+        hinweis "Neu versuchen:  sudo systemctl restart NetworkManager"
+    fi
+
+    # 3. Router erreichbar?
+    gw=$(ip -4 route show default 2>/dev/null | awk '{print $3; exit}')
+    if [[ -n $gw ]]; then
+        ok "3. Standard-Route über $gw"
+    else
+        fehler "3. Keine Standard-Route (kein Router bekannt)"; probleme=1
+    fi
+
+    # 4. Internet ohne Namensauflösung (direkt per IP-Adresse)
+    if curl -sS -o /dev/null -m 8 http://1.1.1.1 2>/dev/null \
+            || ping -c1 -W4 1.1.1.1 >/dev/null 2>&1 \
+            || ping -c1 -W4 8.8.8.8 >/dev/null 2>&1; then
+        ok "4. Internet per IP-Adresse erreichbar"
+    else
+        fehler "4. Internet per IP-Adresse NICHT erreichbar"; probleme=1
+        hinweis "Die Verbindung nach draußen fehlt – liegt am Router, an der VM-Netzwerkart"
+        hinweis "oder am Host-PC (VPN/Firewall), nicht an Noi OS' Namensauflösung"
+    fi
+
+    # 5. Namensauflösung (DNS)
+    dns=$(resolvectl dns 2>/dev/null | awk -F': ' 'NF>1 && $2!=""{print $2}' | tr '\n' ' ')
+    if getent ahosts archive.ubuntu.com >/dev/null 2>&1; then
+        ok "5. Namensauflösung (DNS) funktioniert${dns:+ – Server: $dns}"
+    else
+        fehler "5. Namensauflösung (DNS) funktioniert NICHT${dns:+ – Server: $dns}"; probleme=1
+        hinweis "/etc/resolv.conf: $(readlink -f /etc/resolv.conf 2>/dev/null)"
+        hinweis "Neu versuchen:  sudo systemctl restart systemd-resolved NetworkManager"
+    fi
+
+    # 6. Webseiten
+    if curl -fsS -o /dev/null -m 10 http://archive.ubuntu.com/ubuntu/dists/ 2>/dev/null; then
+        ok "6. Webseiten erreichbar (archive.ubuntu.com)"
+    else
+        fehler "6. Webseiten NICHT erreichbar (archive.ubuntu.com)"; probleme=1
+    fi
+
+    echo
+    if (( probleme == 0 )); then
+        ok "${B}Internet funktioniert.${R}"
+    else
+        hinweis "${B}Der erste Punkt mit ✘ ist die Ursache.${R} Bitte einen Screenshot davon an:"
+        hinweis "https://github.com/Noi922/Noi-OS/issues"
+        return 1
+    fi
+}
+
+# --- noi status: Überblick über Dienste, offene Ports, Anmeldungen --------------
+cmd_status() {
+    local d zustand
+    titel "Dienste"
+    for d in ssh cockpit.socket ufw fail2ban unattended-upgrades NetworkManager \
+             systemd-networkd sddm cups bluetooth podman.socket docker; do
+        systemctl cat "$d" >/dev/null 2>&1 || continue
+        zustand=$(systemctl is-active "$d" 2>/dev/null)
+        # ssh und cockpit starten erst bei der ersten Verbindung (Socket)
+        if [[ $zustand != active ]] && systemctl is-active --quiet "${d%.service}.socket" 2>/dev/null; then
+            zustand="bereit (startet bei Verbindung)"
+        fi
+        case $zustand in
+            active|bereit*) ok "$(printf '%-22s %s' "${d%.socket}" "${zustand/active/läuft}")" ;;
+            failed)         fehler "$(printf '%-22s fehlgeschlagen' "$d")" ;;
+            *)              hinweis "$(printf '%-22s aus' "${d%.socket}")" ;;
+        esac
+    done
+
+    titel "Von außen erreichbare Ports (lauschende Programme)"
+    if command -v ss >/dev/null; then
+        ss -H -tuln 2>/dev/null | awk '
+            { split($5, a, ":"); port=a[length(a)]; addr=$5; sub(/:[^:]*$/, "", addr)
+              if (addr ~ /^127\.|^\[::1\]|%lo/) next
+              key=$1 "/" port; if (!(key in seen)) { seen[key]=1; printf "      %-5s %s\n", $1, port } }' \
+            | sort -k2 -n | uniq
+    fi
+    if [[ -r /etc/ufw/user.rules ]] || [[ $EUID -eq 0 ]]; then
+        local offen
+        offen=$(grep -hoE '^-A ufw-user-input .*--dport [0-9:]+ -j ACCEPT' /etc/ufw/user.rules 2>/dev/null \
+                | sed -E 's/.*-p ([a-z]+).*--dport ([0-9:]+).*/\2\/\1/' | sort -u | tr '\n' ' ')
+        hinweis "In der Firewall freigegeben: ${offen:-nichts}"
+    else
+        hinweis "Firewall-Freigaben anzeigen:  sudo noi status"
+    fi
+
+    titel "Angemeldet"
+    who 2>/dev/null | awk '{printf "      %-12s %-8s %s %s %s\n", $1, $2, $3, $4, $5}'
+    if command -v fail2ban-client >/dev/null && [[ $EUID -eq 0 ]]; then
+        hinweis "fail2ban – gesperrte Adressen (SSH): $(fail2ban-client status sshd 2>/dev/null \
+            | awk -F: '/Currently banned/{gsub(/[ \t]/,"",$2); print $2}')"
+    fi
+    if command -v podman >/dev/null; then
+        hinweis "Container (laufend): $(podman ps -q 2>/dev/null | wc -l)"
+    fi
+    echo
+}
+
+# --- noi port: Port in der Firewall freigeben oder schließen --------------------
+cmd_port() {
+    local aktion=${1:-} port=${2:-}
+    if [[ ! $aktion =~ ^(auf|zu|liste)$ ]]; then
+        fehler "Aufruf: noi port auf 8080 | noi port zu 8080 | noi port liste"
+        hinweis "Mit Protokoll: noi port auf 51820/udp"
+        return 1
+    fi
+    if [[ $aktion == liste ]]; then
+        command -v ufw >/dev/null || { fehler "Die Firewall ufw ist nicht installiert"; return 1; }
+        als_root ufw status
+        return
+    fi
+    if [[ ! $port =~ ^[0-9]{1,5}(:[0-9]{1,5})?(/(tcp|udp))?$ ]]; then
+        fehler "Ungültiger Port: '${port}' (Beispiele: 80, 8080/tcp, 51820/udp, 6000:6010/tcp)"
+        return 1
+    fi
+    local p
+    for p in $(echo "${port%%/*}" | tr ':' ' '); do
+        (( 10#$p >= 1 && 10#$p <= 65535 )) || { fehler "Port außerhalb von 1–65535: $p"; return 1; }
+    done
+    [[ $port == *:* && $port != */* ]] && { fehler "Bereiche brauchen ein Protokoll, z. B. $port/tcp"; return 1; }
+    command -v ufw >/dev/null || { fehler "Die Firewall ufw ist nicht installiert"; return 1; }
+    if [[ $aktion == auf ]]; then
+        als_root ufw allow "$port" comment 'noi port' >/dev/null && ok "Port $port ist jetzt freigegeben"
+    else
+        if [[ ${port%%/*} == 22 ]] && [[ -n ${SSH_CONNECTION:-} ]]; then
+            fehler "Port 22 nicht geschlossen: Du bist per SSH verbunden und würdest dich aussperren."
+            hinweis "Wirklich schließen (an der Konsole):  sudo ufw delete allow 22/tcp"
+            return 1
+        fi
+        als_root ufw delete allow "$port" >/dev/null && ok "Port $port ist jetzt geschlossen"
+    fi
+}
+
+# --- noi shell: Standard-Shell wechseln (hamster <-> bash) ----------------------
+cmd_shell() {
+    local ziel aktuell
+    aktuell=$(getent passwd "$(id -un)" | cut -d: -f7)
+    case "${1:-}" in
+        hamster) ziel=/usr/bin/hamster ;;
+        bash)    ziel=/bin/bash ;;
+        "")      hinweis "Deine Standard-Shell: ${B}${aktuell}${R}"
+                 hinweis "Wechseln:  noi shell hamster  |  noi shell bash"
+                 return 0 ;;
+        *)       fehler "Aufruf: noi shell hamster | noi shell bash"; return 1 ;;
+    esac
+    [[ -x $ziel ]] || { fehler "$ziel ist nicht installiert"; return 1; }
+    if [[ $aktuell == "$ziel" ]]; then ok "$ziel ist bereits deine Standard-Shell"; return 0; fi
+    grep -qx "$ziel" /etc/shells 2>/dev/null \
+        || { fehler "$ziel steht nicht in /etc/shells"; return 1; }
+    if als_root chsh -s "$ziel" "$(id -un)"; then
+        ok "Standard-Shell: $ziel – gilt ab dem nächsten Terminal bzw. der nächsten Anmeldung"
+    else
+        fehler "Shell konnte nicht geändert werden"; return 1
+    fi
+}
+
+# --- noi paket: mehrere Programme auf einmal installieren (Flathub) -------------
+paket_apps() {
+    case "$1" in
+        gaming)        echo "com.valvesoftware.Steam net.lutris.Lutris com.heroicgameslauncher.hgl" ;;
+        kreativ)       echo "org.kde.krita org.inkscape.Inkscape org.kde.kdenlive org.audacityteam.Audacity" ;;
+        medien)        echo "com.spotify.Client com.obsproject.Studio org.kde.haruna" ;;
+        kommunikation) echo "org.mozilla.Thunderbird org.signal.Signal com.discordapp.Discord" ;;
+        entwicklung)   echo "com.vscodium.codium io.github.shiftey.Desktop" ;;
+        *) return 1 ;;
+    esac
+}
+paket_text() {
+    case "$1" in
+        gaming)        echo "Steam, Lutris, Heroic (Epic/GOG)" ;;
+        kreativ)       echo "Krita, Inkscape, Kdenlive, Audacity" ;;
+        medien)        echo "Spotify, OBS Studio, Haruna (Videoplayer)" ;;
+        kommunikation) echo "Thunderbird, Signal, Discord" ;;
+        entwicklung)   echo "VSCodium, GitHub Desktop" ;;
+    esac
+}
+PAKETE="gaming kreativ medien kommunikation entwicklung"
+
+cmd_paket() {
+    local name=${1:-} app fehl=0 p
+    if [[ -z $name || $name == liste ]]; then
+        titel "App-Pakete (aus Flathub)"
+        for p in $PAKETE; do
+            printf '  %s%-14s%s %s\n' "$B" "$p" "$R" "$(paket_text "$p")"
+        done
+        echo; hinweis "Installieren:  noi paket gaming"; echo
+        return 0
+    fi
+    if ! paket_apps "$name" >/dev/null; then
+        fehler "Unbekanntes Paket: $name"; hinweis "Verfügbar: $PAKETE"; return 1
+    fi
+    command -v flatpak >/dev/null || { fehler "Flatpak ist nicht installiert"; return 1; }
+    if ! flatpak remotes --columns=name 2>/dev/null | grep -qx flathub; then
+        titel "Flathub als App-Quelle einrichten"
+        als_root flatpak remote-add --system --if-not-exists flathub \
+            https://dl.flathub.org/repo/flathub.flatpakrepo \
+            || { fehler "Flathub nicht erreichbar – Internetverbindung prüfen (noi netz)"; return 1; }
+    fi
+    titel "Paket „$name“: $(paket_text "$name")"
+    for app in $(paket_apps "$name"); do
+        if flatpak info "$app" >/dev/null 2>&1; then
+            ok "$app ist schon installiert"
+        elif flatpak install -y --noninteractive flathub "$app"; then
+            ok "$app installiert"
+        else
+            fehler "$app konnte nicht installiert werden"; fehl=1
+        fi
+    done
+    echo
+    if (( fehl )); then hinweis "Nicht alles hat geklappt – später erneut versuchen."; return 1; fi
+    ok "${B}Fertig!${R} Die Programme stehen im Startmenü."
+}
+
+# --- noi dev: Programmiersprachen und Werkzeuge nachinstallieren ----------------
+dev_pakete() {
+    case "$1" in
+        python) echo "python3-pip python3-venv python3-dev pipx python-is-python3" ;;
+        node)   echo "nodejs npm" ;;
+        c)      echo "build-essential gdb cmake pkg-config" ;;
+        java)   echo "default-jdk maven" ;;
+        go)     echo "golang-go" ;;
+        rust)   echo "rustc cargo" ;;
+        php)    echo "php-cli composer" ;;
+        *) return 1 ;;
+    esac
+}
+dev_text() {
+    case "$1" in
+        python) echo "Python 3 mit pip, venv und pipx" ;;
+        node)   echo "Node.js und npm (JavaScript)" ;;
+        c)      echo "C/C++: gcc, g++, make, gdb, cmake" ;;
+        java)   echo "Java (OpenJDK) und Maven" ;;
+        go)     echo "Go" ;;
+        rust)   echo "Rust mit cargo" ;;
+        php)    echo "PHP (Kommandozeile) und Composer" ;;
+    esac
+}
+dev_pruefbefehl() {
+    case "$1" in
+        python) echo pip3 ;; node) echo npm ;; c) echo cmake ;; java) echo javac ;;
+        go) echo go ;; rust) echo cargo ;; php) echo composer ;;
+    esac
+}
+DEV_SPRACHEN="python node c java go rust php"
+
+cmd_dev() {
+    local s=${1:-} p
+    if [[ -z $s || $s == liste ]]; then
+        titel "Programmiersprachen"
+        for p in $DEV_SPRACHEN; do
+            if command -v "$(dev_pruefbefehl "$p")" >/dev/null 2>&1; then
+                printf '  %s✔%s %s%-7s%s %s\n' "$G" "$R" "$B" "$p" "$R" "$(dev_text "$p")"
+            else
+                printf '  %s·%s %s%-7s%s %s\n' "$L" "$R" "$B" "$p" "$R" "$(dev_text "$p")"
+            fi
+        done
+        echo; hinweis "✔ = installiert.  Nachinstallieren:  noi dev node"
+        hinweis "Python-Projekt anlegen:  python -m venv .venv && source .venv/bin/activate"
+        hinweis "Python-Programme installieren:  pipx install <name>"; echo
+        return 0
+    fi
+    if ! dev_pakete "$s" >/dev/null; then
+        fehler "Unbekannte Sprache: $s"; hinweis "Verfügbar: $DEV_SPRACHEN"; return 1
+    fi
+    titel "$(dev_text "$s") installieren"
+    # shellcheck disable=SC2046 # Paketliste absichtlich in Wörter zerlegen
+    if als_root apt-get update -qq && als_root env DEBIAN_FRONTEND=noninteractive \
+            apt-get install -y $(dev_pakete "$s"); then
+        ok "${B}Fertig:${R} $(dev_text "$s")"
+    else
+        fehler "Installation fehlgeschlagen – Internetverbindung prüfen (noi netz)"; return 1
+    fi
+}
+
+# --- noi bericht: alles Wichtige für eine Fehlermeldung in eine Datei -----------
+cmd_bericht() {
+    local datei="${1:-$HOME/noi-bericht-$(date +%Y%m%d-%H%M).txt}"
+    titel "Systembericht wird erstellt"
+    {
+        echo "Noi OS – Systembericht vom $(date '+%d.%m.%Y %H:%M')"
+        echo "=================================================="
+        abschnitt() { echo; echo "### $1"; shift; "$@" 2>&1 | head -n 60; }
+        abschnitt "System"            cat /etc/os-release
+        abschnitt "Kernel"            uname -a
+        abschnitt "Virtualisierung"   systemd-detect-virt
+        abschnitt "Speicher"          free -h
+        abschnitt "Festplatten"       df -h -x tmpfs -x devtmpfs -x squashfs
+        abschnitt "Laufwerke"         lsblk -o NAME,SIZE,TYPE,FSTYPE,MOUNTPOINT
+        abschnitt "Grafik/Netzwerkkarten" bash -c 'lspci 2>/dev/null | grep -Ei "vga|3d|display|ethernet|network"'
+        abschnitt "Netzwerk (Geräte)" bash -c 'nmcli device 2>/dev/null || networkctl --no-pager 2>/dev/null'
+        abschnitt "Netzwerk (Adressen)" bash -c 'ip -brief addr; echo; ip route'
+        abschnitt "Namensauflösung"   bash -c 'resolvectl dns 2>/dev/null; readlink -f /etc/resolv.conf'
+        abschnitt "Fehlgeschlagene Dienste" systemctl --failed --no-pager --plain
+        abschnitt "noi doktor"        "$0" doktor
+        abschnitt "noi netz"          "$0" netz
+        abschnitt "Fehler im Systemprotokoll (dieser Start)" \
+            bash -c 'journalctl -b -p err --no-pager 2>/dev/null | tail -n 60'
+        abschnitt "Installer-Protokoll (falls vorhanden)" \
+            bash -c 'tail -n 40 /var/log/installer/debug 2>/dev/null || tail -n 40 ~/.cache/calamares/session.log 2>/dev/null || echo "keins"'
+    } > "$datei" 2>&1
+    # Der Bericht enthält keine Passwörter; Rechnername und IP-Adressen stehen drin.
+    ok "Gespeichert: ${B}$datei${R} ($(wc -l < "$datei") Zeilen)"
+    hinweis "Diese Datei kannst du an eine Fehlermeldung anhängen:"
+    hinweis "https://github.com/Noi922/Noi-OS/issues"
+    hinweis "Enthalten sind Rechnername und IP-Adressen, aber keine Passwörter."
+}
+
 # --- noi thema / noi hintergrund ----------------------------------------------
 cmd_thema() {
     local schema
@@ -310,6 +679,13 @@ cmd_hilfe() {
   ${B}noi aufraeumen${R}   Speicherplatz freigeben
   ${B}noi sicherung${R}    Systemschnappschuss erstellen (vor großen Änderungen)
   ${B}noi doktor${R}       System prüfen (Speicher, Dienste, Updates, Netz, Akku)
+  ${B}noi netz${R}         Internet-Diagnose: zeigt, an welcher Stelle es hakt
+  ${B}noi status${R}       Dienste, offene Ports, Anmeldungen
+  ${B}noi port${R}         Firewall: noi port auf 8080 | zu 8080 | liste
+  ${B}noi shell${R}        Standard-Shell wechseln: hamster | bash
+  ${B}noi paket${R}        App-Pakete: gaming | kreativ | medien | kommunikation | entwicklung
+  ${B}noi dev${R}          Programmiersprachen: python | node | c | java | go | rust | php
+  ${B}noi bericht${R}      Systembericht für Fehlermeldungen speichern
   ${B}noi thema${R}        Farbschema wechseln: hell | dunkel
   ${B}noi hintergrund${R}  Hintergrundbild: wald | wueste | nacht | winter
   ${B}noi zentrale${R}     grafische Noi-Zentrale öffnen
@@ -332,6 +708,13 @@ case "${1:-hilfe}" in
     aufraeumen|clean)     cmd_aufraeumen ;;
     sicherung|backup|snapshot) cmd_sicherung ;;
     doktor|doctor|check)  cmd_doktor ;;
+    netz|netzwerk|internet) cmd_netz ;;
+    status|dienste)       cmd_status ;;
+    port|firewall)        cmd_port "${2:-}" "${3:-}" ;;
+    shell)                cmd_shell "${2:-}" ;;
+    paket|pakete|bundle)  cmd_paket "${2:-}" ;;
+    dev|sprache)          cmd_dev "${2:-}" ;;
+    bericht|report)       cmd_bericht "${2:-}" ;;
     thema|theme)          cmd_thema "${2:-}" ;;
     hintergrund|wallpaper) cmd_hintergrund "${2:-}" ;;
     zentrale|gui)         cmd_zentrale ;;

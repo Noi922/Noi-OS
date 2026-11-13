@@ -94,6 +94,14 @@ kio-extras
 python3-pyqt5
 libnotify-bin
 
+# --- Programmieren: Python startklar (weitere Sprachen: noi dev) --------------
+python3-pip
+python3-venv
+python3-dev
+pipx
+python-is-python3
+git
+
 # --- Erste Schritte & Sicherung ----------------------------------------------
 plasma-welcome
 timeshift

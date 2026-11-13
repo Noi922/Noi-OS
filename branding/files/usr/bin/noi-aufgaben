@@ -1,0 +1,201 @@
+#!/usr/bin/env python3
+"""Noi-Aufgaben – einfache Aufgabenliste, die sich von selbst speichert.
+
+Aufgabe eintippen, Enter. Abhaken per Klick, erledigte Aufgaben wandern nach
+unten. Gespeichert wird in ~/.local/share/noi-aufgaben/aufgaben.json
+(bzw. $NOI_AUFGABEN_DATEI).
+"""
+import json
+import os
+import sys
+import time
+
+try:
+    from PyQt5.QtCore import Qt
+    from PyQt5.QtGui import QIcon, QKeySequence
+    from PyQt5.QtWidgets import (QApplication, QHBoxLayout, QLabel, QLineEdit,
+                                 QListWidget, QListWidgetItem, QPushButton, QShortcut,
+                                 QVBoxLayout, QWidget)
+except ImportError:
+    sys.stderr.write("Noi-Aufgaben braucht PyQt5:  sudo apt install python3-pyqt5\n")
+    sys.exit(1)
+
+
+def data_file():
+    path = os.environ.get("NOI_AUFGABEN_DATEI")
+    if not path:
+        base = os.environ.get("XDG_DATA_HOME") or os.path.expanduser("~/.local/share")
+        path = os.path.join(base, "noi-aufgaben", "aufgaben.json")
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    return path
+
+
+class Liste:
+    """Reine Logik (ohne Oberfläche) – dadurch automatisch testbar."""
+
+    def __init__(self, path):
+        self.path = path
+        self.items = []          # [{"text": str, "done": bool, "t": float}]
+        self.error = ""
+        self.load()
+
+    def load(self):
+        try:
+            with open(self.path, encoding="utf-8") as f:
+                raw = json.load(f)
+            self.items = [{"text": str(i["text"]), "done": bool(i.get("done")),
+                           "t": float(i.get("t", 0))}
+                          for i in raw if isinstance(i, dict) and str(i.get("text", "")).strip()]
+        except FileNotFoundError:
+            self.items = []
+        except (OSError, ValueError, TypeError, KeyError) as e:
+            # Beschädigte Datei nicht überschreiben, sondern beiseitelegen
+            self.items = []
+            try:
+                os.replace(self.path, self.path + ".defekt")
+                self.error = f"Die Aufgabendatei war beschädigt und liegt jetzt in {self.path}.defekt"
+            except OSError:
+                self.error = f"Aufgaben konnten nicht gelesen werden: {e}"
+
+    def save(self):
+        tmp = self.path + ".tmp"
+        try:
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(self.items, f, ensure_ascii=False, indent=1)
+            os.replace(tmp, self.path)
+            self.error = ""
+        except OSError as e:
+            self.error = f"Speichern fehlgeschlagen: {e}"
+
+    def sorted(self):
+        """Offene zuerst (neueste oben), erledigte darunter."""
+        return sorted(self.items, key=lambda i: (i["done"], -i["t"]))
+
+    def add(self, text):
+        text = " ".join(text.split())
+        if not text:
+            return False
+        self.items.append({"text": text[:300], "done": False, "t": time.time()})
+        self.save()
+        return True
+
+    def toggle(self, item, done):
+        item["done"] = bool(done)
+        self.save()
+
+    def remove(self, item):
+        self.items = [i for i in self.items if i is not item]
+        self.save()
+
+    def clear_done(self):
+        n = sum(1 for i in self.items if i["done"])
+        self.items = [i for i in self.items if not i["done"]]
+        self.save()
+        return n
+
+    def open_count(self):
+        return sum(1 for i in self.items if not i["done"])
+
+
+class Aufgaben(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.liste = Liste(data_file())
+        self.filling = False
+        self.setWindowIcon(QIcon.fromTheme("view-task", QIcon.fromTheme("checkbox")))
+        self.resize(460, 560)
+
+        self.entry = QLineEdit()
+        self.entry.setPlaceholderText("Neue Aufgabe … (Enter)")
+        self.entry.returnPressed.connect(self.add)
+        add = QPushButton(QIcon.fromTheme("list-add"), "Hinzufügen")
+        add.clicked.connect(self.add)
+        top = QHBoxLayout()
+        top.addWidget(self.entry, 1)
+        top.addWidget(add)
+
+        self.view = QListWidget()
+        self.view.itemChanged.connect(self.on_changed)
+        self.status = QLabel()
+        delete = QPushButton(QIcon.fromTheme("edit-delete"), "Löschen")
+        delete.setToolTip("Markierte Aufgabe löschen (Entf)")
+        delete.clicked.connect(self.remove)
+        clear = QPushButton(QIcon.fromTheme("edit-clear-all"), "Erledigte entfernen")
+        clear.clicked.connect(self.clear_done)
+        bottom = QHBoxLayout()
+        bottom.addWidget(self.status, 1)
+        bottom.addWidget(delete)
+        bottom.addWidget(clear)
+
+        lay = QVBoxLayout(self)
+        lay.addLayout(top)
+        lay.addWidget(self.view, 1)
+        lay.addLayout(bottom)
+        QShortcut(QKeySequence.Delete, self.view, self.remove)
+        self.refresh()
+        self.entry.setFocus()
+
+    def refresh(self):
+        self.filling = True
+        self.view.clear()
+        for it in self.liste.sorted():
+            row = QListWidgetItem(it["text"])
+            row.setFlags(row.flags() | Qt.ItemIsUserCheckable)
+            row.setCheckState(Qt.Checked if it["done"] else Qt.Unchecked)
+            row.setData(Qt.UserRole, id(it))
+            f = row.font()
+            f.setStrikeOut(it["done"])
+            row.setFont(f)
+            if it["done"]:
+                row.setForeground(self.palette().color(self.palette().Disabled,
+                                                       self.palette().Text))
+            self.view.addItem(row)
+        self.filling = False
+        n = self.liste.open_count()
+        self.status.setText(self.liste.error or
+                            ("Alles erledigt 🎉" if self.liste.items and n == 0 else
+                             f"{n} offen" if self.liste.items else "Noch keine Aufgaben"))
+        self.setWindowTitle(f"Noi-Aufgaben ({n})" if n else "Noi-Aufgaben")
+
+    def item_for(self, row):
+        if row is None:
+            return None
+        key = row.data(Qt.UserRole)
+        return next((i for i in self.liste.items if id(i) == key), None)
+
+    def add(self):
+        if self.liste.add(self.entry.text()):
+            self.entry.clear()
+            self.refresh()
+
+    def on_changed(self, row):
+        if self.filling:
+            return
+        it = self.item_for(row)
+        if it is not None:
+            self.liste.toggle(it, row.checkState() == Qt.Checked)
+            self.refresh()
+
+    def remove(self):
+        it = self.item_for(self.view.currentItem())
+        if it is not None:
+            self.liste.remove(it)
+            self.refresh()
+
+    def clear_done(self):
+        self.liste.clear_done()
+        self.refresh()
+
+
+def main():
+    app = QApplication(sys.argv)
+    app.setApplicationName("noi-aufgaben")
+    app.setApplicationDisplayName("Noi-Aufgaben")
+    app.setDesktopFileName("noi-aufgaben")
+    win = Aufgaben()
+    win.show()
+    return app.exec_()
+
+
+if __name__ == "__main__":
+    sys.exit(main())

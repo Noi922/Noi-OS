@@ -286,6 +286,9 @@ sed -i -e 's|^showDonateUrl:.*|showDonateUrl: false|' \
 grep -q 'internetCheckUrl:.*Release.gpg' "$CAL/modules/welcome.conf" \
     || { echo "FEHLER: internetCheckUrl in welcome.conf nicht gesetzt" >&2; exit 1; }
 
+# --- Shell hamster (nach Calamares: stellt dort die Shell neuer Benutzer ein) --
+bash "$B/install-hamster.sh"
+
 # --- Netzwerk: NetworkManager soll ALLE Netzwerkkarten verwalten -------------
 # Ubuntu lässt Kabel-Netzwerk sonst "unverwaltet" (nur WLAN/Mobilfunk aktiv);
 # das Ubuntu-Desktop-Setup behebt das per Netplan – hier fehlte das, daher

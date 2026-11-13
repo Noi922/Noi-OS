@@ -31,6 +31,25 @@ BLOCK_SNAP="yes"                # snapd sperren (wie Linux Mint)
 FIREFOX_FROM_MOZILLA="yes"      # Firefox als .deb aus Mozillas APT-Repo statt Snap
 SQUASHFS_COMP="xz"              # xz = kleinste ISO, zstd = schneller Build
 
+# --- Shell "hamster" (https://github.com/Noi922/Linux-plugin) ----------------
+HAMSTER="yes"                   # hamster installieren (Desktop und Server)
+HAMSTER_DEFAULT_SHELL="yes"     # hamster als Standard-Shell für neue Benutzer
+                                # (Zurück pro Benutzer: chsh -s /bin/bash)
+
+# --- Edition -----------------------------------------------------------------
+# desktop = KDE Plasma mit grafischem Installer (Standard)
+# server  = ohne Desktop: SSH, Firewall, Web-Verwaltung, Text-Installer
+# Auswahl beim Bauen:  sudo NOI_EDITION=server ./build.sh
+EDITION="${NOI_EDITION:-desktop}"
+
 # --- Abgeleitet (nicht ändern) ----------------------------------------------
-ISO_LABEL="NOIOS_${DISTRO_VERSION//./_}"
-ISO_NAME="${DISTRO_ID}-${DISTRO_VERSION}-${ARCH}.iso"
+case "$EDITION" in
+    desktop)
+        ISO_LABEL="NOIOS_${DISTRO_VERSION//./_}"
+        ISO_NAME="${DISTRO_ID}-${DISTRO_VERSION}-${ARCH}.iso" ;;
+    server)
+        LIVE_HOSTNAME="noios-server"
+        ISO_LABEL="NOIOS_SRV_${DISTRO_VERSION//./_}"
+        ISO_NAME="${DISTRO_ID}-server-${DISTRO_VERSION}-${ARCH}.iso" ;;
+    *)  echo "Unbekannte Edition: $EDITION (erlaubt: desktop, server)" >&2; exit 1 ;;
+esac

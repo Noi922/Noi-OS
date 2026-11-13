@@ -23,13 +23,49 @@ Sicherheitsupdates bis 2029.
 | Handy | **KDE Connect**: Dateien, Benachrichtigungen und Zwischenablage mit dem Handy teilen |
 | Sicherheit | automatische Sicherheitsupdates (auch Firefox), Firewall aktiv, Secure Boot, AppArmor |
 | System | zram (schneller Auslagerungsspeicher), Timeshift für Sicherungen, Willkommens-Assistent |
-| `noi`-Werkzeug | `noi update` (System + Flatpak + Firmware), `noi info`, `noi aufraeumen`, `noi sicherung`, `noi doktor` (System-Check), `noi thema hell\|dunkel`, `noi hintergrund wald\|wueste\|nacht\|winter` – auch im Startmenü, mit Tab-Vervollständigung; Flatpak-Apps aktualisieren sich wöchentlich automatisch |
-| Eigene Apps | **Noi-Zentrale** (Auslastung, Pflege, Aussehen, App-Empfehlungen), **Noi-Notizen** (speichert von selbst), **Noi-Fokus** (Pomodoro-Timer) |
+| `noi`-Werkzeug | `noi update` (System + Flatpak + Firmware + hamster), `noi info`, `noi aufraeumen`, `noi sicherung`, `noi doktor` (System-Check), `noi netz` (Internet-Diagnose), `noi status` (Dienste, offene Ports), `noi port auf\|zu 8080` (Firewall), `noi shell hamster\|bash`, `noi bericht` (Systembericht für Fehlermeldungen), `noi thema hell\|dunkel`, `noi hintergrund wald\|wueste\|nacht\|winter` – auch im Startmenü, mit Tab-Vervollständigung; Flatpak-Apps aktualisieren sich wöchentlich automatisch |
+| Shell | **[hamster](https://github.com/Noi922/Linux-plugin)** als Standard-Shell: erklärt Fehler, vervollständigt Befehle, läuft auf echter bash (zurück: `noi shell bash`; abschaltbar in `config.sh`) |
+| Eigene Apps | **Noi-Zentrale** (Auslastung, Pflege, Aussehen, App-Pakete und App-Empfehlungen), **Noi-Notizen** (speichert von selbst), **Noi-Aufgaben** (Aufgabenliste), **Noi-Passwort** (Passwörter und Passphrasen erzeugen), **Noi-Fokus** (Pomodoro-Timer) |
+| App-Pakete | `noi paket gaming` (Steam, Lutris, Heroic), `kreativ`, `medien`, `kommunikation`, `entwicklung` – oder per Klick in der Noi-Zentrale |
+| Programmieren | **Python** startklar (`python`, `pip`, `venv`, `pipx`), `git`, Compiler; weitere Sprachen mit `noi dev node` (auch `c`, `java`, `go`, `rust`, `php`) |
 | Komfort | Nachtlicht ab 20 Uhr, GameMode für Spiele, Firefox mit uBlock Origin und ohne Telemetrie |
 | Anzeige | passt sich automatisch an: Skalierung nach Pixeldichte (100–250 %, wie Windows), in VMs wächst die Auflösung mit dem Fenster |
 | VM-Unterstützung | Gastwerkzeuge für VirtualBox, VMware, KVM/Proxmox und Hyper-V |
 | Qualität | jeder Build wird automatisch in einer VM getestet (Start, Desktop, Internet, Firewall) |
 | Sprache | Deutsch, Tastatur `de`, Zeitzone Europe/Berlin (in `config.sh` änderbar) |
+
+## Noi OS Server (ohne Desktop)
+
+Dieselbe Basis, aber schlank für Heimserver, VMs und Mini-PCs:
+
+| Bereich | Noi OS Server |
+|---|---|
+| Installer | Text-Installer auf der Konsole (Festplatte, Rechnername, Benutzer) – auch unbeaufsichtigt per Befehl |
+| Fernzugriff | SSH (root-Anmeldung gesperrt), fail2ban sperrt Angreifer nach Fehlversuchen aus |
+| Web-Verwaltung | **Cockpit** unter `https://IP-Adresse:9090`: Auslastung, Dienste, Updates, Speicher, Container |
+| Sicherheit | Firewall (nur SSH und Cockpit offen), automatische Sicherheitsupdates, Secure Boot |
+| Container | **Docker** mit Compose und Buildx (der angelegte Benutzer darf `docker` ohne sudo), dazu Podman |
+| Werkzeug | `noi update`, `noi doktor`, `noi netz`, `noi status`, `noi port auf\|zu 8080`, `noi bericht`, `noi info`, `noi aufraeumen` |
+| Programmieren | **Python** startklar (`python`, `pip`, `venv`, `pipx`), `git`, gcc/make; weitere Sprachen mit `noi dev node` (auch `java`, `go`, `rust`, `php`) |
+| Shell | **hamster** als Standard-Shell des angelegten Benutzers (Skripte, `ssh host befehl`, scp laufen weiter über bash) |
+| Netzwerk | DHCP auf allen Kabel-Netzwerkkarten (`/etc/netplan/01-noios-dhcp.yaml` für feste IP) |
+
+> **Docker und die Firewall:** Ports, die ein Container mit `-p 8080:80` veröffentlicht,
+> sind von außen erreichbar, auch ohne `noi port auf` – Docker trägt seine Regeln an
+> der Firewall vorbei ein. Nur lokal erreichbar: `-p 127.0.0.1:8080:80`.
+
+**Herunterladen:** *Actions* → **„Noi OS Server bauen“** → *Run workflow*; die ISO
+erscheint danach unter *Releases* (als Vorab-Version markiert).
+
+**Selbst bauen und testen:**
+
+```bash
+sudo NOI_EDITION=server ./build.sh                       # → out/noios-server-1.0-amd64.iso
+sudo tools/server-test.sh out/noios-server-1.0-amd64.iso  # Installation + Start in QEMU prüfen
+```
+
+Was installiert wird, steht in `config/packages-server.list`; eingerichtet wird das
+System von `chroot/setup-server.sh`, der Installer ist `server/noi-server-install`.
 
 ## Projektstruktur
 
@@ -42,6 +78,10 @@ noi-os/
 ├── test-vm.sh                ← startet die ISO in QEMU
 ├── chroot/setup.sh           ← richtet das System im chroot ein
 ├── chroot/calamares/         ← robuster Ersatz für den Installer-Schritt "automirror"
+├── chroot/setup-server.sh    ← richtet die Server-Edition ein
+├── chroot/install-hamster.sh ← installiert die Shell hamster (beide Editionen)
+├── config/packages-server.list  ← Pakete der Server-Edition
+├── server/                   ← Text-Installer, Begrüßung, SSH-Schlüssel-Dienst (Server)
 ├── iso/grub.cfg              ← Bootmenü der Live-ISO
 ├── tools/make-camo-wallpaper.py  ← erzeugt das Camouflage-Hintergrundbild
 └── branding/                 ← Paket "noios-branding"

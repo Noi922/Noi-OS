@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Noi-Aufgaben
+GenericName=Aufgabenliste
+Comment=Einfache Aufgabenliste, die sich von selbst speichert
+Exec=noi-aufgaben
+Icon=view-task
+Terminal=false
+Categories=Qt;Office;ProjectManagement;
+Keywords=aufgaben;todo;liste;erledigen;merken;noi;
+StartupWMClass=noi-aufgaben

@@ -1,0 +1,108 @@
+# Baut Noi OS **Server** (ohne Desktop) auf GitHubs Servern, testet die ISO in
+# einer VM (Installation, Start per BIOS und UEFI, SSH, Firewall,
+# Web-Verwaltung) und veröffentlicht sie als Release.
+# Starten: Repo -> "Actions" -> "Noi OS Server bauen" -> "Run workflow".
+# Oder automatisch beim Pushen eines Tags wie server-v1.0
+name: Noi OS Server bauen
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["server-v*"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-server
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      NOI_EDITION: server
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Schnelltests (Skript-Syntax)
+        run: |
+          # (bash -n prüft nur die erste Datei – daher einzeln)
+          for f in build.sh chroot/setup-server.sh server/noi-server-install \
+                   tools/server-test.sh branding/files/usr/bin/noi chroot/install-hamster.sh; do
+            bash -n "$f"
+          done
+          sh -n server/motd
+
+      - name: Build-Verzeichnis wählen
+        run: |
+          free_mnt=$(df --output=avail -BG /mnt 2>/dev/null | tail -1 | tr -dc 0-9 || echo 0)
+          if [ "${free_mnt:-0}" -ge 20 ]; then base=/mnt/noi-server; else base=$PWD/work; fi
+          sudo mkdir -p "$base"
+          echo "NOI_WORK=$base/build" >> "$GITHUB_ENV"
+          echo "NOI_OUT=$base/out"    >> "$GITHUB_ENV"
+          echo "Build-Verzeichnis: $base"
+
+      - name: Server-ISO bauen
+        run: sudo --preserve-env=NOI_WORK,NOI_OUT,NOI_EDITION ./build.sh
+
+      - name: ISO in VM testen (Installation, BIOS + UEFI, SSH, Firewall, Cockpit)
+        run: |
+          sudo apt-get install -y -qq qemu-system-x86 ovmf sshpass socat gdisk \
+              squashfs-tools xorriso rsync python3-pil >/dev/null
+          # KVM für schnelle VMs freischalten
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules >/dev/null
+          sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm
+          source config.sh
+          sudo tools/server-test.sh "$NOI_OUT/$ISO_NAME" server-test
+
+      - name: Testbericht anzeigen
+        if: always()
+        run: |
+          [ -f server-test/bericht.md ] && cat server-test/bericht.md >> "$GITHUB_STEP_SUMMARY" || true
+
+      - name: Test-Ergebnisse speichern
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: server-test
+          path: server-test/
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Release veröffentlichen
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          source config.sh
+          sudo chown -R "$USER" "$NOI_OUT"
+          cd "$NOI_OUT"
+          sha256sum "$ISO_NAME" > SHA256SUMS
+          if [ "${GITHUB_REF_TYPE}" = tag ]; then
+            tag="${GITHUB_REF_NAME}"
+          else
+            tag="server-v${DISTRO_VERSION}-build${{ github.run_number }}"
+          fi
+          sed -e "s/@ISO@/$ISO_NAME/g" -e "s/@SHA@/${GITHUB_SHA::7}/g" \
+              -e "s/@NAME@/$DISTRO_NAME/g" -e "s/@VERSION@/$DISTRO_VERSION/g" \
+              "$GITHUB_WORKSPACE/.github/release-notes-server.md" > notes.md
+          # Server-Builds sind Vorab-Versionen: "Latest" bleibt die Desktop-ISO
+          gh release create "$tag" "$ISO_NAME" SHA256SUMS --repo "$GITHUB_REPOSITORY" \
+            --prerelease --latest=false \
+            --title "$DISTRO_NAME Server $DISTRO_VERSION (Build ${{ github.run_number }}, $(date +%d.%m.%Y))" \
+            --notes-file notes.md
+
+      - name: Alte automatische Server-Builds aufräumen
+        env:
+          GH_TOKEN: ${{ github.token }}
+          KEEP: 2
+        run: |
+          gh release list --repo "$GITHUB_REPOSITORY" --limit 100 --json tagName,createdAt \
+            --jq '[.[] | select(.tagName | test("^server-v.*-build[0-9]+$"))]
+                  | sort_by(.createdAt) | reverse | .['"$KEEP"':] | .[].tagName' |
+          while read -r tag; do
+            echo "Lösche altes Release $tag"
+            gh release delete "$tag" --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag
+          done

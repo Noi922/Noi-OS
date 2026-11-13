@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Noi-Passwort
+GenericName=Passwort-Generator
+Comment=Sichere Passwörter und Passphrasen erzeugen
+Exec=noi-passwort
+Icon=dialog-password
+Terminal=false
+Categories=Qt;Utility;Security;
+Keywords=passwort;password;generator;passphrase;sicher;noi;
+StartupWMClass=noi-passwort

@@ -4,6 +4,7 @@
 #  Erzeugt eine bootfähige Live-ISO (BIOS + UEFI) mit Installer.
 #
 #  Aufruf:  sudo ./build.sh            alles bauen (setzt nach Abbruch fort)
+#           sudo NOI_EDITION=server ./build.sh   Server-Edition (ohne Desktop)
 #           sudo ./build.sh clean      Build-Verzeichnis löschen
 #           sudo ./build.sh rebuild    clean + alles bauen
 #           sudo ./build.sh <stufe>    ab einer Stufe neu bauen:
@@ -15,7 +16,10 @@ ROOT="$(cd "$(dirname "$0")" && pwd)"
 # shellcheck source=config.sh
 source "$ROOT/config.sh"
 
-WORK="${NOI_WORK:-$ROOT/build}"     # per Umgebungsvariable umlenkbar (z. B. CI)
+# Build-Verzeichnis: per Umgebungsvariable umlenkbar (z. B. CI); jede Edition
+# hat ihr eigenes, damit sich Desktop- und Server-Build nicht überschreiben.
+if [[ $EDITION == desktop ]]; then WORK="${NOI_WORK:-$ROOT/build}"
+else WORK="${NOI_WORK:-$ROOT/build-$EDITION}"; fi
 CHROOT="$WORK/chroot"
 IMAGE="$WORK/image"
 OUTDIR="${NOI_OUT:-$ROOT/out}"
@@ -93,31 +97,52 @@ stage_bootstrap() {
 }
 
 stage_branding() {
+    if [[ $EDITION == server ]]; then
+        log "2/5 Branding-Paket – entfällt bei der Server-Edition"
+        return 0
+    fi
     log "2/5 Branding-Paket (Hintergrundbild, Logo, Theme) bauen"
     rm -f "$WORK"/*-branding_*.deb
     "$ROOT/branding/build-deb.sh" "$WORK"
 }
 
 stage_chroot() {
-    log "3/5 System im chroot einrichten (Pakete, KDE Plasma, Installer)"
+    log "3/5 System im chroot einrichten (Edition: $EDITION)"
     mount_chroot
-    local B="$CHROOT/tmp/noi-build"
+    local B="$CHROOT/tmp/noi-build" setup
     mkdir -p "$B"
-    cp "$ROOT/config.sh" "$ROOT/config/packages.list" "$ROOT/chroot/setup.sh" "$B/"
-    cp "$WORK"/*-branding_*.deb "$B/"
-    cp -r "$ROOT/chroot/calamares" "$B/"
+    # Die Edition steht nur in der Umgebung des Aufrufers – fest eintragen,
+    # damit das Skript im chroot dieselbe sieht.
+    { echo "NOI_EDITION=$EDITION"; cat "$ROOT/config.sh"; } > "$B/config.sh"
+    cp "$ROOT/chroot/install-hamster.sh" "$B/"
+    if [[ $EDITION == server ]]; then
+        setup="setup-server.sh"
+        cp "$ROOT/config/packages-server.list" "$B/packages.list"
+        cp "$ROOT/chroot/setup-server.sh" "$B/"
+        cp -r "$ROOT/server" "$B/"
+        cp "$ROOT/branding/files/usr/bin/noi" "$B/noi"
+        cp "$ROOT/branding/files/usr/share/bash-completion/completions/noi" "$B/noi.completion"
+    else
+        setup="setup.sh"
+        cp "$ROOT/config/packages.list" "$ROOT/chroot/setup.sh" "$B/"
+        cp "$WORK"/*-branding_*.deb "$B/"
+        cp -r "$ROOT/chroot/calamares" "$B/"
+    fi
     # DNS für den Build: resolv.conf temporär vom Host übernehmen
     mv "$CHROOT/etc/resolv.conf" "$CHROOT/etc/resolv.conf.noi" 2>/dev/null || true
     cp -L /etc/resolv.conf "$CHROOT/etc/resolv.conf"
 
-    chroot "$CHROOT" /bin/bash /tmp/noi-build/setup.sh
+    chroot "$CHROOT" /bin/bash "/tmp/noi-build/$setup"
 
-    rm -f "$CHROOT/etc/resolv.conf"
-    if [[ -e "$CHROOT/etc/resolv.conf.noi" || -L "$CHROOT/etc/resolv.conf.noi" ]]; then
-        mv "$CHROOT/etc/resolv.conf.noi" "$CHROOT/etc/resolv.conf"
-    else
-        ln -s ../run/systemd/resolve/stub-resolv.conf "$CHROOT/etc/resolv.conf"
-    fi
+    # DNS im fertigen System: wie bei Ubuntu ein Verweis auf systemd-resolved.
+    # debootstrap kopiert die resolv.conf des BUILD-Rechners ins Abbild; die
+    # zurückzulegen hieße, dessen DNS-Server (Router, Docker, Firmennetz …)
+    # fest einzubauen – dann gäbe es im installierten System "kein Internet",
+    # obwohl die Verbindung steht.
+    rm -f "$CHROOT/etc/resolv.conf" "$CHROOT/etc/resolv.conf.noi"
+    ln -s ../run/systemd/resolve/stub-resolv.conf "$CHROOT/etc/resolv.conf"
+    [[ -x "$CHROOT/usr/lib/systemd/systemd-resolved" ]] \
+        || die "systemd-resolved fehlt im Abbild – DNS würde nicht funktionieren"
     rm -rf "$CHROOT/tmp/noi-build"
     umount_chroot
 }
@@ -135,8 +160,12 @@ stage_squashfs() {
 
     chroot "$CHROOT" dpkg-query -W --showformat='${Package} ${Version}\n' \
         > "$IMAGE/casper/filesystem.manifest"
-    printf '%s\n' casper calamares calamares-settings-kubuntu \
-        calamares-settings-ubuntu-common > "$IMAGE/casper/filesystem.manifest-remove"
+    if [[ $EDITION == server ]]; then
+        echo casper > "$IMAGE/casper/filesystem.manifest-remove"
+    else
+        printf '%s\n' casper calamares calamares-settings-kubuntu \
+            calamares-settings-ubuntu-common > "$IMAGE/casper/filesystem.manifest-remove"
+    fi
 
     local opts=(-noappend -e boot/grub)
     [[ $SQUASHFS_COMP == xz ]] && opts+=(-comp xz -Xbcj x86 -b 1M) || opts+=(-comp "$SQUASHFS_COMP")
@@ -146,7 +175,11 @@ stage_squashfs() {
 
 stage_iso() {
     log "5/5 Bootfähige ISO erzeugen (BIOS + UEFI)"
-    echo "${DISTRO_NAME} ${DISTRO_VERSION} \"${DISTRO_CODENAME}\" - ${ARCH} ($(date +%Y%m%d))" \
+    local edname="${DISTRO_NAME}" grubcfg="$ROOT/iso/grub.cfg"
+    if [[ $EDITION == server ]]; then
+        edname="${DISTRO_NAME} Server"; grubcfg="$ROOT/iso/grub-server.cfg"
+    fi
+    echo "${edname} ${DISTRO_VERSION} \"${DISTRO_CODENAME}\" - ${ARCH} ($(date +%Y%m%d))" \
         > "$IMAGE/.disk/info"
     touch "$IMAGE/.disk/base_installable"
     echo "full_cd/single" > "$IMAGE/.disk/cd_type"
@@ -155,7 +188,7 @@ stage_iso() {
         -e "s|@DISTRO_VERSION@|${DISTRO_VERSION}|g" \
         -e "s|@LOCALE@|${LOCALE}|g" \
         -e "s|@KEYMAP@|${KEYMAP}|g" \
-        "$ROOT/iso/grub.cfg" > "$IMAGE/boot/grub/grub.cfg"
+        "$grubcfg" > "$IMAGE/boot/grub/grub.cfg"
 
     # Camo-Hintergrund auch im Bootmenü (abgedunkelt, ohne Schriftzug)
     local tmp; tmp="$(mktemp -d)"

@@ -356,11 +356,21 @@ def main():
         code, out, _ = qga.run("for a in keepassxc filelight elisa kolourpaint gimp kamoso kpat kmines ksudoku; do "
                                "dpkg-query -W -f='${Status}' $a 2>/dev/null | grep -q 'ok installed' || echo $a; done")
         check("Apps installiert (KeePassXC, GIMP, …)", out == "", "alle da" if not out else "fehlt: " + out.replace("\n", " "))
-        code, out, _ = qga.run("for a in noi-zentrale noi-notizen noi-fokus; do "
+        code, out, _ = qga.run("for a in noi-zentrale noi-notizen noi-fokus noi-aufgaben noi-passwort; do "
                                "test -x /usr/bin/$a && python3 -m py_compile /usr/bin/$a || echo $a; done; "
                                "python3 -c 'import PyQt5.QtWidgets' 2>/dev/null || echo PyQt5")
-        check("Noi-Apps (Zentrale, Notizen, Fokus) startbereit", out == "",
+        check("Noi-Apps (Zentrale, Notizen, Aufgaben, Passwort, Fokus) startbereit", out == "",
               "alle da" if not out else "fehlt: " + out.replace("\n", " "), required=False)
+        code, out, _ = qga.run("hamster --version 2>&1 | head -1; grep -c '^DSHELL=/usr/bin/hamster' /etc/adduser.conf; "
+                               "grep -c 'shell: */usr/bin/hamster' /etc/calamares/modules/users.conf")
+        check("Shell hamster installiert und Standard für neue Benutzer",
+              out.startswith("hamster") and out.split("\n")[1:] == ["1", "1"], out.replace("\n", " / "),
+              required=False)
+        code, out, _ = qga.run("python --version 2>&1; pip --version 2>&1 | cut -d' ' -f1; pipx --version >/dev/null 2>&1 && echo pipx; "
+                               "python -m venv /tmp/noi-venv >/dev/null 2>&1 && echo venv; git --version | cut -d' ' -f1")
+        check("Python startklar (python, pip, pipx, venv) und git",
+              out.startswith("Python 3") and out.split("\n")[1:] == ["pip", "pipx", "venv", "git"],
+              out.replace("\n", " / "), required=False)
         code, out, _ = qga.run("noi doktor 2>&1 | grep -c '✔'")
         check("noi doktor läuft", out.isdigit() and int(out) >= 3, f"{out} Prüfungen ok", required=False)
         code, out, _ = qga.run("systemctl is-enabled noios-flatpak-update.timer")
